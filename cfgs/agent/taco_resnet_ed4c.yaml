@@ -1,0 +1,40 @@
+agent:
+  _target_: agents.taco_resnet_ed4ct.TACOAgent
+  obs_shape: ??? # to be specified later
+  action_shape: ??? # to be specified later
+  device: ${device}
+  lr: ${lr}
+  encoder_lr: ${encoder_lr}
+  critic_target_tau: 0.01
+  update_every_steps: 2
+  use_tb: ${use_tb}
+  num_expl_steps: 2000
+  hidden_dim: 1024
+  feature_dim: ${feature_dim}
+  stddev_schedule: ${stddev_schedule}
+  stddev_clip: 0.3
+  curl: ${curl}
+  reward: ${reward}
+  multistep: ${multistep}
+  latent_a_dim: ${latent_a_dim}
+  height: ${height}  
+  width: ${width} 
+  pretrained_path: ${pretrained_path}
+  freeze_encoder: ${freeze_encoder}
+  no_taco: ${no_taco}
+  use_ed4ct: ${use_ed4ct}
+
+### TACO parameters
+curl: true
+reward: true
+multistep: 3
+latent_a_dim: none
+batch_size: 128  # Smaller batch size for stability
+height: 224
+width: 224
+pretrained_path: resnet50_l5_pretrained
+freeze_encoder: false
+wandb_project: "taco_metaworld_resnet_ed4ct"
+no_taco: false
+use_ed4ct: true
+

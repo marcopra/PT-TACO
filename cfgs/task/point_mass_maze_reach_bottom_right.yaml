@@ -1,0 +1,10 @@
+defaults:
+  - hard
+  - _self_
+
+task_name: point_mass_maze_reach_bottom_right
+obs_type: pixels
+agent:
+  stddev_clip: 0.5
+  hidden_dim: 512
+  num_expl_steps: 5000

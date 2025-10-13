@@ -1,0 +1,76 @@
+defaults:
+  - _self_
+  - agent@_global_: taco_pretrain
+
+# device and general settings
+device: cuda
+seed: 1
+
+
+# dataset settings
+dataset_config: /home/mprattico/Pretrain-TACO/dataset/small_random
+train_ratio: 0.8
+
+# training settings
+batch_size: 1024
+lr: 1e-4
+encoder_lr: 5e-4
+feature_dim: 50
+hidden_dim: 1024
+multistep: 3
+nstep: 3
+discount: 0.99
+num_workers: 0
+total_steps: 1000000
+checkpoint: "500000,1000000"
+optimizer: adam
+
+# evaluation settings
+eval_batches: 10
+eval_frequency: 50
+log_frequency: 100
+
+# data loading settings
+max_episodes_per_dataset: 100000000000
+max_size: null
+homogeneous: false
+
+# saving settings
+save_path: models/maze/proprio/
+
+# wandb settings
+use_wandb: false
+wandb_project: taco_proprio-st-pretrain
+wandb_entity: null
+wandb_run_name: null
+
+# resume settings
+resume_checkpoint: null
+resume_wandb_run: null
+continue_steps: true
+
+# TACO loss settings
+no_curl: false
+no_reward: false
+
+# feature extractor settings
+feature_extractor: conv
+height: 84
+width: 84
+
+# agent level parameters that override agent config
+curl: false
+reward: false
+latent_a_dim: none
+pretrained_path: none
+freeze_encoder: false
+no_taco: false
+
+
+
+hydra:
+  run:
+    dir: ./exp_local_pt/${exp_name}
+  sweep:
+    dir: ./exp_local_pt/${now:%Y.%m.%d}/${now:%H%M}
+    subdir: ${hydra.job.num}

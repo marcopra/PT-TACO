@@ -1,0 +1,22 @@
+2025-10-13 17:14:56,118 INFO    MainThread:199794 [wandb_setup.py:_flush():67] Current SDK version is 0.19.9
+2025-10-13 17:14:56,119 INFO    MainThread:199794 [wandb_setup.py:_flush():67] Configure stats pid to 199794
+2025-10-13 17:14:56,119 INFO    MainThread:199794 [wandb_setup.py:_flush():67] Loading settings from /home/mprattico/.config/wandb/settings
+2025-10-13 17:14:56,119 INFO    MainThread:199794 [wandb_setup.py:_flush():67] Loading settings from /home/mprattico/PT-TACO/exp_local/default/wandb/settings
+2025-10-13 17:14:56,119 INFO    MainThread:199794 [wandb_setup.py:_flush():67] Loading settings from environment variables
+2025-10-13 17:14:56,119 INFO    MainThread:199794 [wandb_init.py:setup_run_log_directory():662] Logging user logs to /home/mprattico/PT-TACO/exp_local/default/wandb/run-20251013_171456-ahcveb2t/logs/debug.log
+2025-10-13 17:14:56,119 INFO    MainThread:199794 [wandb_init.py:setup_run_log_directory():663] Logging internal logs to /home/mprattico/PT-TACO/exp_local/default/wandb/run-20251013_171456-ahcveb2t/logs/debug-internal.log
+2025-10-13 17:14:56,119 INFO    MainThread:199794 [wandb_init.py:init():781] calling init triggers
+2025-10-13 17:14:56,119 INFO    MainThread:199794 [wandb_init.py:init():786] wandb.init called with sweep_config: {}
+config: {'domain': 'gym', 'frame_stack': 3, 'action_repeat': 2, 'discount': 0.99, 'random_init': True, 'random_goal': False, 'num_seed_frames': 4000, 'eval_every_frames': 5000, 'num_eval_episodes': 10, 'save_snapshot': False, 'replay_buffer_size': 500000, 'replay_buffer_num_workers': 4, 'nstep': 3, 'batch_size': 1024, 'seed': 1, 'device': 'cuda', 'resolution': 84, 'save_video': False, 'save_train_video': False, 'use_tb': True, 'use_wandb': True, 'wandb_project': 'taco_proprio-gym', 'wandb_entity': 'taco', 'wandb_tag': 'none', 'wandb_run_name': '2025.10.13_1714_cdmc_PointMaze_MediumDense-v3', 'wandb_id': 'none', 'experiment': 'exp', 'checkpoint': False, 'lr': 0.0001, 'encoder_lr': 0.0001, 'feature_dim': 50, 'exp_name': 'default', 'num_train_frames': 30100000, 'stddev_schedule': 'linear(1.0,0.1,2000000)', 'task_name': 'PointMaze_MediumDense-v3', 'agent': {'stddev_clip': 0.3, 'num_expl_steps': 2000, '_target_': 'agents.taco_proprio_agent.TACOProprioAgent', 'obs_shape': [8], 'action_shape': [2], 'device': 'cuda', 'lr': 0.0001, 'encoder_lr': 0.0001, 'critic_target_tau': 0.01, 'update_every_steps': 2, 'use_tb': True, 'hidden_dim': 1024, 'encoder_hidden_dim': [1024, 1024], 'repr_dim': 512, 'feature_dim': 50, 'stddev_schedule': 'linear(1.0,0.1,2000000)', 'reward': False, 'multistep': 3, 'latent_a_dim': 'none', 'pretrained_path': 'none', 'freeze_encoder': False, 'no_taco': False}, 'reward': False, 'multistep': 3, 'latent_a_dim': 'none', 'pretrained_path': 'none', 'freeze_encoder': False, 'no_taco': False, 'observation_key': 'proprio_observation', 'encoder_checkpoint_steps': [1500, 5000, 20000, 40000, 100000], '_wandb': {}}
+2025-10-13 17:14:56,119 INFO    MainThread:199794 [wandb_init.py:init():809] starting backend
+2025-10-13 17:14:56,120 INFO    MainThread:199794 [wandb_init.py:init():813] sending inform_init request
+2025-10-13 17:14:56,127 INFO    MainThread:199794 [backend.py:_multiprocessing_setup():101] multiprocessing start_methods=fork,spawn,forkserver, using: spawn
+2025-10-13 17:14:56,127 INFO    MainThread:199794 [wandb_init.py:init():823] backend started and connected
+2025-10-13 17:14:56,130 INFO    MainThread:199794 [wandb_init.py:init():915] updated telemetry
+2025-10-13 17:14:56,134 INFO    MainThread:199794 [wandb_init.py:init():939] communicating run to backend with 90.0 second timeout
+2025-10-13 17:14:56,764 INFO    MainThread:199794 [wandb_init.py:init():1014] starting run threads in backend
+2025-10-13 17:14:56,885 INFO    MainThread:199794 [wandb_run.py:_console_start():2454] atexit reg
+2025-10-13 17:14:56,886 INFO    MainThread:199794 [wandb_run.py:_redirect():2306] redirect: wrap_raw
+2025-10-13 17:14:56,887 INFO    MainThread:199794 [wandb_run.py:_redirect():2371] Wrapping output streams.
+2025-10-13 17:14:56,887 INFO    MainThread:199794 [wandb_run.py:_redirect():2394] Redirects installed.
+2025-10-13 17:14:56,891 INFO    MainThread:199794 [wandb_init.py:init():1056] run started, returning control to user process

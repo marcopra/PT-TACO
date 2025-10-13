@@ -1,0 +1,73 @@
+domain: gym
+frame_stack: 3
+action_repeat: 2
+discount: 0.99
+random_init: true
+random_goal: false
+num_seed_frames: 4000
+eval_every_frames: 5000
+num_eval_episodes: 10
+save_snapshot: false
+replay_buffer_size: 500000
+replay_buffer_num_workers: 4
+nstep: 3
+batch_size: 1024
+seed: 1
+device: cuda
+resolution: 84
+save_video: false
+save_train_video: false
+use_tb: true
+use_wandb: true
+wandb_project: taco_proprio-gym
+wandb_entity: taco
+wandb_tag: none
+wandb_run_name: ${now:%Y.%m.%d}_${now:%H%M}_cdmc_${task_name}
+wandb_id: none
+experiment: exp
+checkpoint: false
+lr: 0.0001
+encoder_lr: 0.0001
+feature_dim: 50
+exp_name: default
+num_train_frames: 30100000
+stddev_schedule: linear(1.0,0.1,2000000)
+task_name: PointMaze_MediumDense-v3
+agent:
+  stddev_clip: 0.3
+  num_expl_steps: 2000
+  _target_: agents.taco_proprio_agent.TACOProprioAgent
+  obs_shape: ???
+  action_shape: ???
+  device: ${device}
+  lr: ${lr}
+  encoder_lr: ${encoder_lr}
+  critic_target_tau: 0.01
+  update_every_steps: 2
+  use_tb: ${use_tb}
+  hidden_dim: 1024
+  encoder_hidden_dim:
+  - 1024
+  - 1024
+  repr_dim: 512
+  feature_dim: ${feature_dim}
+  stddev_schedule: ${stddev_schedule}
+  reward: ${reward}
+  multistep: ${multistep}
+  latent_a_dim: ${latent_a_dim}
+  pretrained_path: ${pretrained_path}
+  freeze_encoder: ${freeze_encoder}
+  no_taco: ${no_taco}
+reward: false
+multistep: 3
+latent_a_dim: none
+pretrained_path: none
+freeze_encoder: false
+no_taco: false
+observation_key: proprio_observation
+encoder_checkpoint_steps:
+- 1500
+- 5000
+- 20000
+- 40000
+- 100000

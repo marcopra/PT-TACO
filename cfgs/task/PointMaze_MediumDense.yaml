@@ -1,0 +1,9 @@
+defaults:
+  - hard
+  - _self_
+
+task_name: PointMaze_MediumDense-v3
+agent:
+  stddev_clip: 0.5
+  # hidden_dim: 512
+  num_expl_steps: 5000

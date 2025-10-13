@@ -1,0 +1,48 @@
+agent:
+  _target_: agents.taco_last_layer.TACOAgent
+  obs_shape: ??? # to be specified later
+  action_shape: ??? # to be specified later
+  device: ${device}
+  lr: ${lr}
+  encoder_lr: ${encoder_lr}
+  critic_target_tau: 0.01
+  update_every_steps: 2
+  use_tb: ${use_tb}
+  num_expl_steps: 2000
+  hidden_dim: 1024
+  feature_dim: ${feature_dim}
+  stddev_schedule: ${stddev_schedule}
+  stddev_clip: 0.3
+  curl:   ${curl}
+  reward: ${reward}
+  multistep: ${multistep}
+  latent_a_dim: ${latent_a_dim}
+  pretrained_path: ${pretrained_path}
+  freeze_encoder: ${freeze_encoder}
+  no_taco: ${no_taco}
+
+### TACO parameters
+curl: true
+reward: true
+multistep: 3
+latent_a_dim: none
+batch_size: 1024
+pretrained_path: none
+freeze_encoder: false
+no_taco: false
+snapshot_step: [2000, 5000, 10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000, 100000]
+encoder_checkpoint_steps: [100000]
+
+
+
+#  python train_metaworld_checkpoint.py agent=taco_last_layer exp_name=baseline01019 seed=1019 env_name=button-press-v2 random_init=true random_goal=false save_snapshot=true wandb_tag=baseline num_train_frames=400000 device=cuda:0 agent.no_taco=false batch_size=1024 wandb_project=taco_last_layer
+#  python train_metaworld_checkpoint.py agent=taco_last_layer exp_name=baseline11111 seed=1111 env_name=push-v2 random_init=true random_goal=false save_snapshot=true wandb_tag=baseline num_train_frames=800000 device=cuda:1 agent.no_taco=false batch_size=1024 wandb_project=taco_last_layer
+#  python train_metaworld_checkpoint.py agent=taco_last_layer exp_name=baseline12222 seed=1222 env_name=basketball-v2 random_init=true random_goal=false save_snapshot=true wandb_tag=baseline num_train_frames=800000 device=cuda:2 agent.no_taco=false batch_size=1024 wandb_project=taco_last_layer
+#  python train_metaworld_checkpoint.py agent=taco_last_layer exp_name=baseline31019 seed=1020 env_name=button-press-v2 random_init=true random_goal=false save_snapshot=true wandb_tag=baseline num_train_frames=400000 device=cuda:3 agent.no_taco=false batch_size=1024 wandb_project=taco_last_layer
+#  python train_metaworld_checkpoint.py agent=taco_last_layer exp_name=baseline11112 seed=1112 env_name=push-v2 random_init=true random_goal=false save_snapshot=true wandb_tag=baseline num_train_frames=800000 device=cuda:4 agent.no_taco=false batch_size=1024 wandb_project=taco_last_layer
+#  python train_metaworld_checkpoint.py agent=taco_last_layer exp_name=baseline12222 seed=1223 env_name=basketball-v2 random_init=true random_goal=false save_snapshot=true wandb_tag=baseline num_train_frames=800000 device=cuda:5 agent.no_taco=false batch_size=1024 wandb_project=taco_last_layer
+
+
+#  python train_metaworld_last_layer.py agent=taco_last_layer exp_name=baseline0111 seed=111 env_name=button-press-v2 random_init=true random_goal=false save_snapshot=true wandb_tag=snapshot num_train_frames=100000 device=cuda:0 agent.no_taco=false batch_size=1024 wandb_project=taco_last_layer eval_every_frames=7000
+#  python train_metaworld_last_layer.py agent=taco_last_layer exp_name=baseline1112 seed=112 env_name=button-press-v2 random_init=true random_goal=false save_snapshot=true wandb_tag=snapshot num_train_frames=100000 device=cuda:0 agent.no_taco=false batch_size=1024 wandb_project=taco_last_layer eval_every_frames=7000
+#  python train_metaworld_last_layer.py agent=taco_last_layer exp_name=baseline2113 seed=113 env_name=button-press-v2 random_init=true random_goal=false save_snapshot=true wandb_tag=snapshot num_train_frames=100000 device=cuda:2 agent.no_taco=false batch_size=1024 wandb_project=taco_last_layer eval_every_frames=7000
