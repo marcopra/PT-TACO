@@ -1,7 +1,0 @@
-{"time":"2025-10-13T17:14:56.131152622Z","level":"INFO","msg":"stream: starting","core version":"0.19.9","symlink path":"/home/mprattico/PT-TACO/exp_local/default/wandb/run-20251013_171456-ahcveb2t/logs/debug-core.log"}
-{"time":"2025-10-13T17:14:56.434985677Z","level":"INFO","msg":"created new stream","id":"ahcveb2t"}
-{"time":"2025-10-13T17:14:56.435081754Z","level":"INFO","msg":"stream: started","id":"ahcveb2t"}
-{"time":"2025-10-13T17:14:56.435277201Z","level":"INFO","msg":"sender: started","stream_id":"ahcveb2t"}
-{"time":"2025-10-13T17:14:56.435405837Z","level":"INFO","msg":"handler: started","stream_id":"ahcveb2t"}
-{"time":"2025-10-13T17:14:56.435279563Z","level":"INFO","msg":"writer: Do: started","stream_id":"ahcveb2t"}
-{"time":"2025-10-13T17:14:56.76977667Z","level":"INFO","msg":"Starting system monitor"}
