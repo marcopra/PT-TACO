@@ -1,0 +1,7 @@
+# @package _global_
+
+# Null experiment configuration - no overrides
+# Use this when you don't want to load any specific experiment configuration
+# Example: python train_gym.py experiment=null
+
+# This file is intentionally empty to allow using base config without experiment overrides

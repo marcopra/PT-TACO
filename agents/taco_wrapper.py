@@ -5,15 +5,18 @@ import torch.nn.functional as F
 import utils
 from .components import RandomShiftsAug, ProprioceptiveEncoder
 import itertools
+import utils
 
 class TACOWrapper:
     """Wraps any classical algorithm with TACO enhancements"""
 
-    def __init__(self, base_algorithm, obs_shape, action_shape, encoder_lr, feature_dim,
+    def __init__(self, base_algorithm, encoder_lr, feature_dim,
                  hidden_dim, reward, multistep, latent_a_dim, curl, pretrained_path=None, freeze_encoder=False, no_taco=False, optimizer_type="adam"):
         
         self.base_algorithm = base_algorithm
         self.obs_type = self.base_algorithm.obs_type
+        self.obs_shape = self.base_algorithm.obs_shape
+        self.action_shape = self.base_algorithm.action_shape
         self.device = self.base_algorithm.device
         self.update_every_steps = self.base_algorithm.update_every_steps
         self.use_tb = self.base_algorithm.use_tb
@@ -30,20 +33,20 @@ class TACOWrapper:
 
         ### A heuristics to choose the dimensionality of latent actions
         if latent_a_dim == 'none':
-            latent_a_dim = int(action_shape[0]*1.25)+1
+            latent_a_dim = int(self.action_shape[0]*1.25)+1
         ### Create action embeddings
-        self.act_tok = utils.ActionEncoding(action_shape[0], latent_a_dim, multistep)
+        self.act_tok = utils.ActionEncoding(self.action_shape[0], latent_a_dim, multistep)
         if hasattr(self.base_algorithm, 'encoder'):
             self.encoder = self.base_algorithm.encoder
         else:
             assert self.obs_type == 'proprio_obs', "With image observations, an encoder must be provided in the base algorithm."
-            self.encoder = ProprioceptiveEncoder(obs_shape, feature_dim).to(self.device)
+            self.encoder = ProprioceptiveEncoder(self.obs_shape, feature_dim).to(self.device)
         
         self.actor = self.base_algorithm.actor
         self.critic = self.base_algorithm.critic
         self.critic_target = self.base_algorithm.critic_target
 
-        self.TACO = TACO(self.encoder.repr_dim, feature_dim, action_shape, latent_a_dim, hidden_dim, self.act_tok, self.encoder, self.multistep, self.device).to(self.device)
+        self.TACO = TACO(self.encoder.repr_dim, feature_dim, self.action_shape, latent_a_dim, hidden_dim, self.act_tok, self.encoder, self.multistep, self.device).to(self.device)
         self.freeze_encoder = freeze_encoder
         self.no_taco = no_taco
         ### State & Action Encoders
@@ -74,7 +77,7 @@ class TACOWrapper:
         else:
             self.aug = nn.Identity()
 
-        if pretrained_path is not None:
+        if pretrained_path is not None and pretrained_path != 'none':
             raise NotImplementedError("Loading from pretrained not implemented yet.")
         if freeze_encoder:
             raise NotImplementedError("Freezing encoder not implemented yet.")  
@@ -83,6 +86,7 @@ class TACOWrapper:
         
         self.pretrained_path = pretrained_path
         self.train()
+        utils.ColorPrint.green("Initialized TACO Wrapper")
     
     def train(self, training=True):
         self.training = training

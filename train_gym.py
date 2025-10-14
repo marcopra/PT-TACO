@@ -32,15 +32,11 @@ def make_wrapped_agent(obs_spec, action_spec, agent_cfg, wrapper_cfg=None):
     if wrapper_cfg is not None:
         print(f"Using wrapper: {wrapper_cfg._target_}")
         # Instantiate base agent first
-        base_agent = hydra.utils.instantiate(agent_cfg)
+        base_algorithm = hydra.utils.instantiate(agent_cfg)
         
         # Pass required parameters to wrapper
-        return hydra.utils.instantiate(
-            wrapper_cfg,
-            base_algorithm=base_agent,
-            obs_shape=obs_spec.shape,
-            action_shape=action_spec.shape)
-    
+        return hydra.utils.instantiate(wrapper_cfg, base_algorithm=base_algorithm)
+
     return hydra.utils.instantiate(agent_cfg)
 
 # def make_wrapped_agent(obs_spec, action_spec, agent_cfg, wrapper_cfg=None):
@@ -100,13 +96,9 @@ class Workspace:
             raise ValueError(f"Unknown obs_type {self.cfg.obs_type}")  
         action_spec = gym_env.action_spec(self.train_env)
         
-        # Check if wrapper is specified in config
-        wrapper_cfg = None
-        if hasattr(cfg, 'wrapper') and cfg.wrapper is not None and cfg.wrapper != 'none':
-            wrapper_cfg = cfg.wrapper
-        
+        wrapper_cfg = self.cfg.wrapper
         # Passa l'intera configurazione, non cfg.agent
-        self.agent = make_wrapped_agent(obs_spec, action_spec, self.cfg.agent)
+        self.agent = make_wrapped_agent(obs_spec, action_spec, self.cfg.agent, wrapper_cfg)
         self.timer = utils.Timer()
         self._global_step = 0
         self._global_episode = 0
