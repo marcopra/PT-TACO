@@ -8,7 +8,7 @@ import torch
 from typing import Tuple, Optional, Any, Dict, List
 
 from .base_taco_agent import BaseTACOAgent
-from .components import ProprioceptiveEncoder, Actor, Critic, TACOModule
+from .components import ProprioceptiveEncoder, Actor, Critic, TACO
 
 
 class TACOProprioAgent(BaseTACOAgent):
@@ -150,7 +150,7 @@ class TACOProprioAgent(BaseTACOAgent):
         self.critic_target.load_state_dict(self.critic.state_dict())
         
         # TACO module
-        self.TACO = TACOModule(
+        self.TACO = TACO(
             self.encoder.repr_dim,
             self.feature_dim,
             self.action_shape,

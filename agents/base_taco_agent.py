@@ -13,7 +13,7 @@ import itertools
 import utils
 
 from .base_agent import BaseAgent
-from .components import RandomShiftsAug, Actor, Critic, TACOModule
+from .components import RandomShiftsAug, Actor, Critic, TACO
 
 
 class BaseTACOAgent(BaseAgent):
@@ -122,7 +122,7 @@ class BaseTACOAgent(BaseAgent):
         self.actor: Optional[Actor] = None
         self.critic: Optional[Critic] = None
         self.critic_target: Optional[Critic] = None
-        self.TACO: Optional[TACOModule] = None
+        self.TACO: Optional[TACO] = None
         
         # Optimizers
         self.encoder_opt: Optional[torch.optim.Optimizer] = None

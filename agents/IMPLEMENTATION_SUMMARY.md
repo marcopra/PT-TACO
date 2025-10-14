@@ -79,7 +79,7 @@ Contains modular network building blocks:
 **Networks:**
 - `Actor` - Stochastic policy with trunk and policy head
 - `Critic` - Twin Q-network with trunk and Q heads
-- `TACOModule` - Complete contrastive learning module
+- `TACO` - Complete contrastive learning module
 - `RandomShiftsAug` - Image augmentation
 
 ### 4. **Concrete Agent Implementations**

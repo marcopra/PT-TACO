@@ -217,7 +217,7 @@ class TACOTD3BCAgent(TACOProprioAgent):
     def build_networks(self):
         """Build networks for TD3BC agent."""
         # First build encoder and TACO from parent
-        from .components import ProprioceptiveEncoder, TACOModule
+        from .components import ProprioceptiveEncoder, TACO
         
         self.encoder = ProprioceptiveEncoder(
             self.obs_shape,
@@ -247,7 +247,7 @@ class TACOTD3BCAgent(TACOProprioAgent):
         self.critic_target.load_state_dict(self.critic.state_dict())
         
         # TACO module
-        self.TACO = TACOModule(
+        self.TACO = TACO(
             self.encoder.repr_dim,
             self.feature_dim,
             self.action_shape,

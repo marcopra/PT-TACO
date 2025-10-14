@@ -69,7 +69,7 @@ modular_agents/
 │   ├── ProprioceptiveEncoder [Shared MLP encoder]
 │   ├── Actor              [Shared actor network]
 │   ├── Critic             [Shared critic network]
-│   └── TACOModule         [Shared TACO module]
+│   └── TACO         [Shared TACO module]
 │
 ├── taco_agent.py (130 lines)
 │   └── TACOAgent          [Image-based TACO]
@@ -146,7 +146,7 @@ Total: 4 copies of similar code
 ### New: Shared components in networks.py
 ```
 networks.py:    RandomShiftsAug + ImageEncoder + ProprioEncoder +
-                Actor + Critic + TACOModule
+                Actor + Critic + TACO
 
 All agents:     Import and reuse from networks.py
 
@@ -238,7 +238,7 @@ class MyNewAgent(BaseTACOAgent):
         self.encoder = ImageEncoder(...)
         self.actor = Actor(...)
         self.critic = Critic(...)
-        self.TACO = TACOModule(...)
+        self.TACO = TACO(...)
     
     # 3. Override update() if needed
     def update(self, replay_iter, step):

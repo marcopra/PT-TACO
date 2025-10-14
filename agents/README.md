@@ -69,7 +69,7 @@ Contains modular network architectures shared across agents:
 - `Critic` - Twin Q-network critic
 
 **TACO Components:**
-- `TACOModule` - Complete contrastive learning module
+- `TACO` - Complete contrastive learning module
 - `RandomShiftsAug` - Data augmentation for images
 
 **Benefits:**

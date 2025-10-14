@@ -205,7 +205,7 @@ for step in range(num_steps):
 
 ```python
 from modular_agents.base_taco_agent import BaseTACOAgent
-from modular_agents.networks import ImageEncoder, Actor, Critic, TACOModule
+from modular_agents.networks import ImageEncoder, Actor, Critic, TACO
 
 class MyCustomAgent(BaseTACOAgent):
     """My custom TACO variant."""
@@ -216,7 +216,7 @@ class MyCustomAgent(BaseTACOAgent):
         self.encoder = ImageEncoder(self.obs_shape, self.feature_dim)
         self.actor = Actor(...)
         self.critic = Critic(...)
-        self.TACO = TACOModule(...)
+        self.TACO = TACO(...)
         
         # Or create custom ones
         self.my_custom_module = MyCustomModule(...)

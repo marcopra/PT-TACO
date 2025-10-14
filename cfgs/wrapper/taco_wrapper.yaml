@@ -1,0 +1,4 @@
+agent:
+  _target_: agents.taco_wrapper.TACOWrapper
+  obs_type: proprioception  # proprio_obs or pixel_obs
+  pretrained_path: none

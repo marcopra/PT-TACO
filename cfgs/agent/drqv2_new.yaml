@@ -16,6 +16,7 @@ agent:
   pretrained_path: ${pretrained_path}
   freeze_encoder: ${freeze_encoder}
 
+# Override global parameters
 batch_size: 256
 obs_type: proprioception
 pretrained_path: none

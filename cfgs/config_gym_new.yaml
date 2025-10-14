@@ -1,0 +1,84 @@
+defaults:
+  - task@_global_: PointMaze_MediumDense
+  - agent@_global_: drqv2_new
+  - optional experiment: ???  # Optional experiment config
+  - _self_
+  - override hydra/launcher: submitit_local
+
+# Domain
+domain: gym
+
+# Observation settings
+obs_type: proprioception  # proprioception or pixels
+obs_shape: ??? # to be specified later
+action_shape: ??? # to be specified later
+
+# Environment settings
+frame_stack: 3
+action_repeat: 2
+discount: 0.99
+random_init: true
+random_goal: false
+resolution: 84
+
+# Training settings
+num_train_frames: 1000000
+num_seed_frames: 4000
+
+# Evaluation settings
+eval_every_frames: 5000
+num_eval_episodes: 10
+
+# Replay buffer settings
+replay_buffer_size: 500000
+replay_buffer_num_workers: 4
+multistep: 3
+nstep: 3
+batch_size: 256
+
+# Agent hyperparameters (default values)
+lr: 1e-4
+encoder_lr: 1e-4
+feature_dim: 50
+stddev_schedule: linear(1.0,0.1,100000)
+
+# Checkpointing
+save_snapshot: false
+checkpoint: false
+pretrained_path: none
+freeze_encoder: false
+encoder_checkpoint_steps: []
+
+# Misc
+seed: 1
+device: cuda
+save_video: false
+save_train_video: false
+use_tb: true
+use_wandb: true
+
+# Wandb settings
+wandb_project: "taco_gym"
+wandb_entity: "taco"
+wandb_tag: none
+wandb_run_name: ${now:%Y.%m.%d}_${now:%H%M}_${task_name}
+wandb_id: none
+
+# Experiment name
+exp_name: default
+
+
+hydra:
+  run:
+    dir: ./exp_local/${exp_name}
+  sweep:
+    dir: ./exp/${now:%Y.%m.%d}/${now:%H%M}_${agent_cfg.experiment}
+    subdir: ${hydra.job.num}
+  launcher:
+    timeout_min: 4300
+    cpus_per_task: 10
+    gpus_per_node: 1
+    tasks_per_node: 1
+    mem_gb: 160
+    nodes: 1
+    submitit_folder: ./exp/${now:%Y.%m.%d}/${now:%H%M%S}_${agent_cfg.experiment}/.slurm

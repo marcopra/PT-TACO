@@ -294,7 +294,6 @@ class Critic(nn.Module):
         
         return q1, q2
 
-
 class TACO(nn.Module):
     """
     TACO Constrastive loss
