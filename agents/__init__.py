@@ -6,17 +6,9 @@ Base classes provide common functionality, and specialized agents inherit from t
 """
 
 from .base_agent import BaseAgent
-from .base_taco_agent import BaseTACOAgent
 from .drqv2 import DrQV2Agent
-from .taco_agent import TACOAgent
-from .taco_proprio_agent import TACOProprioAgent
-from .taco_td3bc_agent import TACOTD3BCAgent
 
 __all__ = [
     'BaseAgent',
-    'BaseTACOAgent',
     'DrQV2Agent',
-    'TACOAgent',
-    'TACOProprioAgent',
-    'TACOTD3BCAgent',
 ]

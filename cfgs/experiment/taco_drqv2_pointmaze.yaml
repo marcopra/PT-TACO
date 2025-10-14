@@ -1,14 +1,14 @@
 # @package _global_
 
 # Base DrQV2 experiment on PointMaze
-# Usage: python train_gym.py experiment=drqv2_pointmaze_base
 
 defaults:
   - override /task@_global_: PointMaze_MediumDense
-  - override /agent@_global_: drqv2_new
+  - override /agent@_global_: drqv2
+  - override /wrapper@_global_: taco_wrapper
 
 # Experiment name
-exp_name: drqv2_pointmaze_base
+exp_name: taco_drqv2_pointmaze_base
 
 # Observation type
 obs_type: proprioception
@@ -22,10 +22,10 @@ encoder_checkpoint_steps: []
 
 # Training settings
 num_train_frames: 1000000
-batch_size: 256
+batch_size: 1024
 
 # Wandb settings
-wandb_run_name: ${now:%Y.%m.%d}_${now:%H%M}_drqv2_pointmaze_base
+wandb_run_name: ${now:%Y.%m.%d}_${now:%H%M}_tacodrqv2_pointmaze_base
 wandb_tag: drqv2_pointmaze_base
 
 

@@ -1,5 +1,6 @@
 agent:
   _target_: agents.drqv2.DrQV2Agent
+  obs_type: ${obs_type}
   obs_shape: ??? # to be specified later
   action_shape: ??? # to be specified later
   device: ${device}
@@ -15,6 +16,9 @@ agent:
   pretrained_path: ${pretrained_path}
   freeze_encoder: ${freeze_encoder}
 
+# Override global parameters
 batch_size: 256
+obs_type: proprioception
 pretrained_path: none
 freeze_encoder: false
+encoder_checkpoint_steps: []

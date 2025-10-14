@@ -1,4 +1,13 @@
-agent:
+wrapper:
   _target_: agents.taco_wrapper.TACOWrapper
-  obs_type: proprioception  # proprio_obs or pixel_obs
-  pretrained_path: none
+  encoder_lr: ${encoder_lr}
+  feature_dim: ${feature_dim}
+  hidden_dim: 1024
+  reward: true
+  multistep: ${multistep}
+  latent_a_dim: none
+  curl: false
+  pretrained_path: ${pretrained_path}
+  freeze_encoder: ${freeze_encoder}
+  no_taco: false
+  optimizer_type: adam

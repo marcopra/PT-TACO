@@ -24,11 +24,22 @@ from video import TrainVideoRecorder, VideoRecorder
 torch.backends.cudnn.benchmark = True
 
 
-def make_wrapped_agent(obs_spec, action_spec, cfg):
+def make_wrapped_agent(obs_spec, action_spec, agent_cfg, wrapper_cfg=None):
     # Handle agent configuration from global config
-    agent_cfg = cfg
     agent_cfg.obs_shape = obs_spec.shape
     agent_cfg.action_shape = action_spec.shape
+
+    if wrapper_cfg is not None:
+        print(f"Using wrapper: {wrapper_cfg._target_}")
+        # Instantiate base agent first
+        base_agent = hydra.utils.instantiate(agent_cfg)
+        
+        # Pass required parameters to wrapper
+        return hydra.utils.instantiate(
+            wrapper_cfg,
+            base_algorithm=base_agent,
+            obs_shape=obs_spec.shape,
+            action_shape=action_spec.shape)
     
     return hydra.utils.instantiate(agent_cfg)
 

@@ -3,7 +3,7 @@ import torch.nn as nn
 from agents.components import TACO
 import torch.nn.functional as F
 import utils
-from components import ProprioceptiveEncoder, RandomShiftsAug
+from .components import RandomShiftsAug, ProprioceptiveEncoder
 import itertools
 
 class TACOWrapper:
