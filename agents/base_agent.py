@@ -57,6 +57,9 @@ class BaseAgent(ABC):
         
         # These will store fingerprints of frozen models
         self._frozen_fingerprints: Optional[Dict[str, Dict[str, torch.Tensor]]] = None
+    
+    def __getattribute__(self, name):
+        return super().__getattribute__(name)
         
     @abstractmethod
     def build_networks(self):
@@ -115,6 +118,9 @@ class BaseAgent(ABC):
     def load_pretrained(
         self,
         model_path: str,
+        load_encoder: bool = True,
+        load_actor: bool = False,
+        load_critic: bool = False,
         map_location: Optional[torch.device] = None,
         freeze_encoder: bool = False
     ) -> Dict[str, Any]:
@@ -123,6 +129,9 @@ class BaseAgent(ABC):
         
         Args:
             model_path: Path to the saved model checkpoint
+            load_encoder: Whether to load encoder weights
+            load_actor: Whether to load actor weights
+            load_critic: Whether to load critic weights
             map_location: Optional device mapping for torch.load
             freeze_encoder: Whether to freeze loaded components
             
@@ -136,18 +145,21 @@ class BaseAgent(ABC):
         checkpoint = torch.load(model_path, map_location=map_location, weights_only=False)
         
         # Let subclasses handle specific loading
-        self._load_checkpoint_components(checkpoint, freeze_encoder)
+        self._load_components(checkpoint, load_encoder, load_actor, load_critic, freeze_encoder)
         
         if freeze_encoder:
-            self._freeze_components()
+            self._freeze_encoder()
             
         utils.ColorPrint.green("✓ Pretrained model loading completed")
         return checkpoint.get('args', {})
     
     @abstractmethod
-    def _load_checkpoint_components(
+    def _load_components(
         self,
         checkpoint: Dict[str, Any],
+        load_encoder: bool,
+        load_actor: bool,
+        load_critic: bool, 
         freeze_encoder: bool
     ):
         """
@@ -156,15 +168,23 @@ class BaseAgent(ABC):
         
         Args:
             checkpoint: Loaded checkpoint dictionary
+            load_encoder: Whether to load encoder weights
+            load_actor: Whether to load actor weights
+            load_critic: Whether to load critic weights
             freeze_encoder: Whether encoder will be frozen
         """
         pass
-    
-    def _freeze_components(self):
+        
+       
+
+    def _freeze_encoder(self):
         """
         Freeze specified components after loading pretrained weights.
         Subclasses should override to specify which components to freeze.
         """
+        self.encoder.eval()
+        for param in self.encoder.parameters():
+            param.requires_grad = False
         pass
     
     def _get_model_fingerprint(self, model: nn.Module) -> Dict[str, torch.Tensor]:

@@ -46,8 +46,8 @@ class ExtendedTimeStep(NamedTuple):
     step_type: Any
     reward: Any
     discount: Any
-    observation: Any
-    proprio_observation: Any
+    pixel_obs: Any
+    proprio_obs: Any
     action: Any
     success: Any = None
 
@@ -123,8 +123,8 @@ class ActionRepeatWrapper(gym.Wrapper):
             step_type=step_type,
             reward=reward,
             discount=discount if not done else 0.0,
-            observation=image_obs,  # Use image observations
-            proprio_observation=proprio_obs,
+            pixel_obs=image_obs,  # Use image observations
+            proprio_obs=proprio_obs,
             action=action,
             success=info['success'] if 'success' in info else terminated,
         )
@@ -138,8 +138,8 @@ class ActionRepeatWrapper(gym.Wrapper):
             step_type=StepType.FIRST,
             reward=0.0,
             discount=1.0,
-            observation=image_obs,  # Use image observations
-            proprio_observation=proprio_obs,
+            pixel_obs=image_obs,  # Use image observations
+            proprio_obs=proprio_obs,
             action=np.zeros(self.env.action_space.shape, dtype=np.float32),
             success=False
         )
@@ -167,8 +167,8 @@ class FrameStackWrapper(gym.Wrapper):
         obs = env.reset()
 
         # Get the shape from the observation
-        if isinstance(obs.observation, np.ndarray):
-            self.orig_obs_shape = obs.observation.shape
+        if isinstance(obs.pixel_obs, np.ndarray):
+            self.orig_obs_shape = obs.pixel_obs.shape
         else:
             # Handle case where observation might be a different structure
             raise ValueError("Expected observation to be a numpy array")
@@ -187,7 +187,7 @@ class FrameStackWrapper(gym.Wrapper):
         assert len(self._frames) == self._num_frames
         # Stack frames along the channel dimension (axis 0 after transpose)
         obs = np.concatenate(list(self._frames), axis=0)
-        return time_step._replace(observation=obs)
+        return time_step._replace(pixel_obs=obs)
 
     def _extract_pixels(self, obs):
         # Transform HWC to CHW format
@@ -198,14 +198,14 @@ class FrameStackWrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         time_step = self.env.reset(**kwargs)
-        pixels = self._extract_pixels(time_step.observation)
+        pixels = self._extract_pixels(time_step.pixel_obs)
         for _ in range(self._num_frames):
             self._frames.append(pixels)
         return self._transform_observation(time_step)
 
     def step(self, action):
         time_step = self.env.step(action)
-        pixels = self._extract_pixels(time_step.observation)
+        pixels = self._extract_pixels(time_step.pixel_obs)
         self._frames.append(pixels)
         return self._transform_observation(time_step)
     
@@ -418,15 +418,15 @@ class ExtendedTimeStepWrapper(gym.Wrapper):
         return getattr(self.env, name)
 
 
-def observation_spec(env):
-    """Get observation spec of the environment for agent initialization."""
+def pixel_obs_spec(env):
+    """Get pixel observation spec of the environment for agent initialization."""
     shape = env.observation_space.shape
-    return specs.Array(shape, np.uint8, 'observation')
+    return specs.Array(shape, np.uint8, 'pixel_obs')
 
-def proprio_observation_spec(env):
+def proprio_obs_spec(env):
     """Get proprio observation spec of the environment for agent initialization."""
     shape = env.proprio_observation_space.shape
-    return specs.Array(shape, np.float32, 'proprio_observation')
+    return specs.Array(shape, np.float32, 'proprio_obs')
 
 
 def action_spec(env):
@@ -494,123 +494,3 @@ def make(name, frame_stack=1, action_repeat=1, seed=None, resolution=224, random
     env = ExtendedTimeStepWrapper(env)
     
     return env
-
-
-# Tests
-if __name__ == "__main__":
-    import pathlib
-    from replay_buffer import ReplayBufferStorage
-    from dm_env import specs
-    
-    def test_reward_consistency():
-        """Test che il reward calcolato dai wrapper corrisponda a quello nei file npz."""
-        print("Testing reward consistency...")
-        
-        # Crea ambiente con relabelling abilitato
-        env = make('PointMaze_MediumDense-v3', enable_relabelling=True)
-        
-        # Setup specs per replay buffer (usando proprio_observation concatenato)
-        proprio_shape = (6,)  # observation + achieved_goal + desired_goal concatenati
-        data_specs = (
-            observation_spec(env),
-            action_spec(env),
-            specs.Array((1,), np.float32, 'reward'),
-            specs.Array((1,), np.float32, 'discount'),
-            specs.Array(proprio_shape, np.float32, 'proprio_observation')
-        )
-        
-        # Directory buffer (assumendo che esista)
-        buffer_dir = pathlib.Path('/home/mprattico/Pretrain-TACO/exp_local/prova2/buffer')
-        if not buffer_dir.exists():
-            print("Buffer directory './buffer' not found. Creating empty test...")
-            return
-        
-        # Carica storage
-        replay_storage = ReplayBufferStorage(data_specs, buffer_dir)
-        
-        if len(replay_storage) == 0:
-            print("No episodes found in buffer directory")
-            return
-        
-        # Carica alcuni episodi npz per test
-        npz_files = list(buffer_dir.glob('*.npz'))
-        if not npz_files:
-            print("No .npz files found in buffer directory")
-            return
-            
-        print(f"Found {len(npz_files)} episodes to test")
-        
-        # Test su primi 3 episodi
-        for i, npz_file in enumerate(npz_files[:3]):
-            print(f"\nTesting episode {i+1}: {npz_file.name}")
-            
-            # Carica episodio
-            episode_data = np.load(npz_file)
-            
-            # Verifica chiavi richieste
-            required_keys = ['reward', 'proprio_observation']
-            if not all(key in episode_data for key in required_keys):
-                print(f"Skipping episode {i+1}: missing required keys")
-                continue
-            
-            # Test su 5 transizioni casuali dell'episodio
-            episode_len = len(episode_data['reward'])
-            test_indices = np.random.choice(episode_len, min(5, episode_len), replace=False)
-            
-            for j, idx in enumerate(test_indices):
-                # Estrai dati originali
-                original_reward = episode_data['reward'][idx][0]
-                proprio_obs = episode_data['proprio_observation'][idx]
-                
-                # Decomponi proprio_observation (observation + achieved_goal + desired_goal)
-                # Formato: [observation(4), achieved_goal(2), desired_goal(2)] = 8 total
-                # Ma dovrebbe essere 6 secondo proprio_shape, quindi probabilmente diverso
-                
-                if len(proprio_obs) >= 6:
-                    # Formato: [observation(4), achieved_goal(2), desired_goal(2)] = 8 total
-                    # Ma per il calcolo dobbiamo usare physics_state con goal incluso
-                    observation = proprio_obs[:4]  # primi 4 valori (observation)  
-                    achieved_goal = proprio_obs[4:6] if len(proprio_obs) >= 8 else proprio_obs[:2]  # achieved_goal
-                    desired_goal = proprio_obs[6:8] if len(proprio_obs) >= 8 else proprio_obs[2:4]  # desired_goal
-                    
-                    # Crea physics_state con goal incluso come ultimi elementi
-                    physics_state = np.concatenate([observation, desired_goal])
-                    
-                    # Estrai action se disponibile
-                    if 'action' in episode_data:
-                        action = episode_data['action'][idx]
-                    else:
-                        action = np.zeros(2, dtype=np.float32)  # dummy action per PointMaze
-                    
-                    try:
-                        # Calcola reward usando state e action
-                        calculated_reward = env.compute_reward_from_state_and_action(proprio_obs, action)
-                        calculated_reward_value = calculated_reward[0]
-                        
-                        # Confronta rewards (aggiustiamo la tolleranza)
-                        reward_diff = abs(original_reward - calculated_reward_value)
-                        
-                        print(f"  Transition {j+1} (idx {idx}):")
-                        print(f"    Achieved goal: {achieved_goal}")
-                        print(f"    Desired goal: {desired_goal}")
-                        print(f"    Original reward: {original_reward:.6f}")
-                        print(f"    Calculated reward: {calculated_reward_value:.6f}")
-                        print(f"    Difference: {reward_diff:.6f}")
-                        
-                        if reward_diff < 1e-5:
-                            print(f"    ✓ Match!")
-                        else:
-                            print(f"    ✗ Mismatch!")
-                            
-                    except Exception as e:
-                        print(f"    Error calculating reward: {e}")
-                        import traceback
-                        traceback.print_exc()
-                        
-                else:
-                    print(f"  Unexpected proprio_observation shape: {proprio_obs.shape}")
-            
-        print("\nReward consistency test completed.")
-    
-    # Esegui test
-    test_reward_consistency()

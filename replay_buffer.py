@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import IterableDataset
 
+from utils import OBS_KEY_REGISTRY
 
 def episode_len(episode):
     # subtract -1 because the dummy first transition
@@ -76,7 +77,7 @@ class ReplayBufferStorage:
 
 class ReplayBuffer(IterableDataset):
     def __init__(self, replay_dir, max_size, num_workers, nstep,  multistep, 
-                 discount, fetch_every, save_snapshot, observation_key='observation'):
+                 discount, fetch_every, save_snapshot, obs_type='observation'):
         self._replay_dir = replay_dir
         self._size = 0
         self._max_size = max_size
@@ -89,7 +90,7 @@ class ReplayBuffer(IterableDataset):
         self._samples_since_last_fetch = fetch_every
         self._save_snapshot = save_snapshot
         self._multistep = multistep
-        self._observation_key = observation_key
+        self._observation_key = OBS_KEY_REGISTRY.get(obs_type, obs_type)
         print('Loading Data into CPU Memory')
         self._preload()
 
@@ -183,7 +184,7 @@ def _worker_init_fn(worker_id):
 
 
 def make_replay_loader(replay_dir, max_size, batch_size, num_workers,
-                       save_snapshot, nstep, multistep, discount, observation_key='observation'):
+                       save_snapshot, nstep, multistep, discount, obs_type='observation'):
     max_size_per_worker = max_size // max(1, num_workers)
     
     iterable = ReplayBuffer(replay_dir,
@@ -194,7 +195,7 @@ def make_replay_loader(replay_dir, max_size, batch_size, num_workers,
                             discount,
                             fetch_every=1000,
                             save_snapshot=save_snapshot,
-                            observation_key=observation_key)
+                            obs_type=obs_type)
     print(f"Replay buffer size: {len(iterable)}")
 
     loader = torch.utils.data.DataLoader(iterable,

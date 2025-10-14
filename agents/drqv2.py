@@ -11,7 +11,7 @@ from typing import Tuple, Optional, Dict, Any
 import utils
 
 from .base_agent import BaseAgent
-from .networks import RandomShiftsAug, ImageEncoder, Actor, Critic
+from .components import RandomShiftsAug, ImageEncoder, Actor, Critic
 
 
 class DrQV2Agent(BaseAgent):
@@ -24,6 +24,7 @@ class DrQV2Agent(BaseAgent):
     
     def __init__(
         self,
+        obs_type: str,
         obs_shape: Tuple[int, ...],
         action_shape: Tuple[int, ...],
         device: torch.device,
@@ -67,7 +68,8 @@ class DrQV2Agent(BaseAgent):
             pretrained_path=pretrained_path,
             freeze_encoder=freeze_encoder
         )
-        
+
+        self.obs_type = utils.OBS_KEY_REGISTRY.get(obs_type, obs_type)
         self.feature_dim = feature_dim
         self.hidden_dim = hidden_dim
         self.critic_target_tau = critic_target_tau
@@ -87,8 +89,11 @@ class DrQV2Agent(BaseAgent):
         self.mse_loss = nn.MSELoss()
         
         # Data augmentation
-        self.aug = RandomShiftsAug(pad=4)
-        
+        if self.obs_type == 'pixels':
+            self.aug = RandomShiftsAug(pad=4)
+        else:
+            self.aug = nn.Identity()
+
         # Load pretrained weights if provided
         if pretrained_path is not None and pretrained_path.lower() != 'none':
             print(f"Loading pretrained model from {pretrained_path}, "
@@ -104,7 +109,13 @@ class DrQV2Agent(BaseAgent):
     def build_networks(self):
         """Build all neural networks for the agent."""
         # Image encoder
-        self.encoder = ImageEncoder(self.obs_shape, self.feature_dim).to(self.device)
+        if self.obs_type == 'pixel_obs':
+            self.encoder = ImageEncoder(self.obs_shape, self.feature_dim).to(self.device)
+        elif self.obs_type == 'proprio_obs':
+            self.encoder = nn.Identity().to(self.device)
+            self.encoder.repr_dim = self.obs_shape[0]
+        else:
+            raise ValueError(f"Unsupported observation type: {self.obs_type}")
         
         # Actor
         self.actor = Actor(
@@ -132,41 +143,53 @@ class DrQV2Agent(BaseAgent):
     
     def build_optimizers(self):
         """Build optimizers for all components."""
-        self.encoder_opt = torch.optim.Adam(self.encoder.parameters(), lr=self.lr)
+        if self.obs_type == 'proprio_obs':
+            self.encoder_opt = None
+        else:
+            self.encoder_opt = torch.optim.Adam(self.encoder.parameters(), lr=self.lr)
         self.actor_opt = torch.optim.Adam(self.actor.parameters(), lr=self.lr)
         self.critic_opt = torch.optim.Adam(self.critic.parameters(), lr=self.lr)
     
-    def _load_checkpoint_components(
+    def _load_components(
         self,
         checkpoint: Dict[str, Any],
+        load_encoder: bool,
+        load_actor: bool,
+        load_critic: bool,
         freeze_encoder: bool
     ):
         """
-        Load encoder from checkpoint.
+        Load specified components from checkpoint.
         
         Args:
             checkpoint: Loaded checkpoint dictionary
+            load_encoder: Whether to load encoder weights
+            load_actor: Whether to load actor weights
+            load_critic: Whether to load critic weights
             freeze_encoder: Whether encoder will be frozen
         """
-        if 'encoder' in checkpoint:
+        if load_encoder and 'encoder' in checkpoint:
             self.encoder.load_state_dict(checkpoint['encoder'])
-            utils.ColorPrint.green("✓ Loaded encoder from checkpoint")
+            utils.ColorPrint.green("✓ Encoder loaded from checkpoint")
         else:
-            utils.ColorPrint.yellow("! No encoder found in checkpoint")
+            raise ValueError("Encoder weights must be loaded for DrQV2.")
+        if load_actor and 'actor' in checkpoint:
+            self.actor.load_state_dict(checkpoint['actor'])
+            utils.ColorPrint.green("✓ Actor loaded from checkpoint")
+        else:
+            raise ValueError("Actor weights must be loaded for DrQV2.")
+        if load_critic and 'critic' in checkpoint:
+            self.critic.load_state_dict(checkpoint['critic'])
+            self.critic_target.load_state_dict(checkpoint['critic'])
+            utils.ColorPrint.green("✓ Critic loaded from checkpoint")
+        else:
+            raise ValueError("Critic weights must be loaded for DrQV2.")
     
-    def _freeze_components(self):
-        """Freeze encoder."""
-        self._frozen_fingerprints = {
-            'encoder': self._get_model_fingerprint(self.encoder),
-        }
-        
-        self.encoder.eval()
-        
-        # Disable gradients
-        for param in self.encoder.parameters():
-            param.requires_grad = False
-            
-        utils.ColorPrint.blue("🔒 Encoder frozen")
+        if freeze_encoder and load_encoder:
+            self._freeze_encoder()
+    
+    def _freeze_encoder(self):
+        return super()._freeze_encoder()
     
     def unfreeze_encoder(self):
         """Unfreeze encoder."""
@@ -181,7 +204,8 @@ class DrQV2Agent(BaseAgent):
     def train(self, training: bool = True):
         """Set training mode."""
         super().train(training)
-        self.encoder.train(training)
+        if self.encoder_opt is not None:
+            self.encoder.train(training)
         self.actor.train(training)
         self.critic.train(training)
     
@@ -256,11 +280,13 @@ class DrQV2Agent(BaseAgent):
             metrics['critic_loss'] = critic_loss.item()
         
         # Optimize encoder and critic
-        self.encoder_opt.zero_grad(set_to_none=True)
+        if self.encoder_opt is not None:
+            self.encoder_opt.zero_grad(set_to_none=True)
         self.critic_opt.zero_grad(set_to_none=True)
         critic_loss.backward()
         self.critic_opt.step()
-        self.encoder_opt.step()
+        if self.encoder_opt is not None:
+            self.encoder_opt.step()
         
         return metrics
     
@@ -317,7 +343,7 @@ class DrQV2Agent(BaseAgent):
         
         # Get batch
         batch = next(replay_iter)
-        obs, action, reward, discount, next_obs = utils.to_torch(
+        obs, action, action_seq, reward, discount, next_obs, r_next_obs = utils.to_torch(
             batch, self.device
         )
         

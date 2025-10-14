@@ -295,81 +295,45 @@ class Critic(nn.Module):
         return q1, q2
 
 
-class TACOModule(nn.Module):
+class TACO(nn.Module):
     """
-    TACO contrastive learning module.
-    
-    Implements the Temporal Action Contrastive Learning objective
-    for learning representations from state-action sequences.
+    TACO Constrastive loss
     """
-    
-    def __init__(
-        self,
-        repr_dim: int,
-        feature_dim: int,
-        action_shape: Tuple[int, ...],
-        latent_a_dim: int,
-        hidden_dim: int,
-        act_tok: nn.Module,
-        encoder: nn.Module,
-        multistep: int,
-        device: torch.device
-    ):
-        """
-        Args:
-            repr_dim: Dimension of encoder representations
-            feature_dim: Dimension of projected features
-            action_shape: Shape of action space
-            latent_a_dim: Dimension of latent action embeddings
-            hidden_dim: Dimension of hidden layers
-            act_tok: Action tokenizer module
-            encoder: State encoder module
-            multistep: Number of action steps to consider
-            device: Device to run on
-        """
-        super().__init__()
-        
+
+    def __init__(self, repr_dim, feature_dim, action_shape, latent_a_dim, hidden_dim, act_tok, encoder, multistep, device):
+        super(TACO, self).__init__()
+
         self.multistep = multistep
         self.encoder = encoder
         self.device = device
         
-        # Project state-action pairs to feature space
+        a_dim = action_shape[0]
+
         self.proj_sa = nn.Sequential(
-            nn.Linear(feature_dim + latent_a_dim * multistep, hidden_dim),
+            nn.Linear(feature_dim + latent_a_dim*multistep, hidden_dim), 
             nn.ReLU(inplace=True),
             nn.Linear(hidden_dim, feature_dim)
         )
         
         self.act_tok = act_tok
         
-        # Project states to feature space
-        self.proj_s = nn.Sequential(
-            nn.Linear(repr_dim, feature_dim),
-            nn.LayerNorm(feature_dim),
-            nn.Tanh()
-        )
+        self.proj_s = nn.Sequential(nn.Linear(repr_dim, feature_dim),
+                                   nn.LayerNorm(feature_dim), nn.Tanh())
         
-        # Predict rewards
         self.reward = nn.Sequential(
-            nn.Linear(feature_dim + latent_a_dim * multistep, hidden_dim),
+            nn.Linear(feature_dim+latent_a_dim*multistep, hidden_dim), 
             nn.ReLU(inplace=True),
             nn.Linear(hidden_dim, 1)
         )
         
-        # Bilinear similarity matrix
         self.W = nn.Parameter(torch.rand(feature_dim, feature_dim))
         self.apply(utils.weight_init)
     
-    def encode(self, x: torch.Tensor, ema: bool = False) -> torch.Tensor:
+    def encode(self, x, ema=False):
         """
-        Encode state to feature space.
-        
-        Args:
-            x: State tensor
-            ema: Whether to use EMA (no gradients)
-            
-        Returns:
-            Encoded features
+        Encoder: z_t = e(x_t)
+        :param x: x_t, x y coordinates
+        :return: z_t, value in r2
         """
         if ema:
             with torch.no_grad():
@@ -378,57 +342,42 @@ class TACOModule(nn.Module):
             z_out = self.proj_s(self.encoder(x))
         return z_out
     
-    def project_sa(self, s: torch.Tensor, a: torch.Tensor) -> torch.Tensor:
-        """
-        Project state-action pair to feature space.
-        
-        Args:
-            s: State features
-            a: Action embeddings
-            
-        Returns:
-            Projected features
-        """
-        x = torch.concat([s, a], dim=-1)
+    def project_sa(self, s, a):
+        x = torch.concat([s,a], dim=-1)
         return self.proj_sa(x)
-    
-    def compute_logits(
-        self,
-        z_a: torch.Tensor,
-        z_pos: torch.Tensor
-    ) -> torch.Tensor:
-        """
-        Compute contrastive logits.
         
-        Args:
-            z_a: State-action features (B, feature_dim)
-            z_pos: Next state features (B, feature_dim)
-            
-        Returns:
-            Logit matrix (B, B) where diagonal elements are positives
+    def compute_logits(self, z_a, z_pos):
         """
-        Wz = torch.matmul(self.W, z_pos.T)  # (feature_dim, B)
-        logits = torch.matmul(z_a, Wz)  # (B, B)
+        - compute (B,B) matrix z_a (W z_pos.T)
+        - positives are all diagonal elements
+        - negatives are all other elements
+        - to compute loss use multiclass cross entropy with identity matrix for labels
+        """
+        
+        Wz = torch.matmul(self.W, z_pos.T)  # (z_dim,B)
+        logits = torch.matmul(z_a, Wz)  # (B,B)
         logits = logits - torch.max(logits, 1)[0][:, None]
         return logits
     
-    def load_checkpoint(self, state_dict: dict):
+    def load_checkpoint(self, state_dict):
         """
         Load TACO weights from checkpoint with selective loading.
+        Loads all TACO networks and reward network (if available and compatible).
         
         Args:
             state_dict: The state dictionary from the checkpoint
         """
         loaded_components = []
         failed_components = []
+        excluded_components = []
         
-        # Try to load with non-strict mode
+        # First, try to load the complete state dict with strict=False
         missing_keys, unexpected_keys = self.load_state_dict(state_dict, strict=False)
         
         if unexpected_keys:
-            utils.ColorPrint.yellow(f"Warning: Unexpected keys: {unexpected_keys}")
+            utils.ColorPrint.yellow(f"Warning: Unexpected keys in checkpoint: {unexpected_keys}")
         
-        # Check what was loaded
+        # Check what was loaded successfully
         all_keys = set(state_dict.keys())
         missing_keys_set = set(missing_keys)
         loaded_keys = all_keys - missing_keys_set
@@ -446,47 +395,50 @@ class TACOModule(nn.Module):
                     component_name = prefix.rstrip('.')
                     loaded_components.append(component_name)
         
-        # Handle reward network
+        # Special handling for reward network
         reward_keys = [k for k in state_dict.keys() if k.startswith('reward.')]
         if reward_keys:
             try:
-                reward_state_dict = {
-                    k.replace('reward.', ''): v
-                    for k, v in state_dict.items()
-                    if k.startswith('reward.')
-                }
-                self.reward.load_state_dict(reward_state_dict, strict=True)
-                loaded_components.append('reward')
-                utils.ColorPrint.green(
-                    f"✓ Loaded reward network with {len(reward_keys)} parameters"
-                )
-            except (RuntimeError, ValueError) as e:
-                utils.ColorPrint.yellow(f"! Reward architecture mismatch: {e}")
-                utils.ColorPrint.yellow("  Reinitializing reward network")
+                reward_state_dict = {k.replace('reward.', ''): v for k, v in state_dict.items() if k.startswith('reward.')}
+                
+                # Check if the reward network architecture is compatible
+                try:
+                    self.reward.load_state_dict(reward_state_dict, strict=True)
+                    loaded_components.append('reward')
+                    utils.ColorPrint.green(f"✓ Loaded reward network with {len(reward_keys)} parameters")
+                except (RuntimeError, ValueError) as e:
+                    utils.ColorPrint.yellow(f"! Reward network architecture mismatch: {e}")
+                    utils.ColorPrint.yellow("  Reinitializing reward network from scratch")
+                    self.reward.apply(utils.weight_init)
+                    failed_components.append('reward (architecture mismatch)')
+                    
+            except Exception as e:
+                utils.ColorPrint.red(f"✗ Failed to load reward network: {e}")
+                utils.ColorPrint.yellow("  Reinitializing reward network from scratch")
                 self.reward.apply(utils.weight_init)
-                failed_components.append('reward (architecture mismatch)')
+                failed_components.append('reward')
         else:
-            utils.ColorPrint.yellow("! No reward network in checkpoint")
+            utils.ColorPrint.yellow("! No reward network found in checkpoint, keeping initialized weights")
         
-        # Report missing components
+        # Report on missing components
         if missing_keys:
             missing_non_reward = [k for k in missing_keys if not k.startswith('reward.')]
             if missing_non_reward:
-                utils.ColorPrint.red(f"✗ Missing components: {missing_non_reward}")
+                utils.ColorPrint.red(f"✗ Missing critical TACO components: {missing_non_reward}")
                 failed_components.extend([k.split('.')[0] for k in missing_non_reward])
         
         # Summary
-        utils.ColorPrint.blue("TACO Checkpoint Loading Summary:")
+        utils.ColorPrint.blue(f"TACO Checkpoint Loading Summary:")
         if loaded_components:
             utils.ColorPrint.blue(f"  ✓ Loaded: {', '.join(loaded_components)}")
         if failed_components:
-            utils.ColorPrint.blue(f"  ✗ Failed: {', '.join(failed_components)}")
-        
-        # Verify required components
+            utils.ColorPrint.blue(f"  ✗ Failed/Reinitialized: {', '.join(failed_components)}")
+            
+        # Log successful loading for required components
         required_components = ['encoder', 'act_tok', 'proj_s', 'proj_sa', 'W']
         loaded_required = [c for c in required_components if c in loaded_components]
         if len(loaded_required) == len(required_components):
-            utils.ColorPrint.green("✓ All required TACO components loaded")
+            utils.ColorPrint.green("✓ All required TACO components loaded successfully")
         else:
             missing_required = [c for c in required_components if c not in loaded_components]
-            utils.ColorPrint.red(f"✗ Missing required: {', '.join(missing_required)}")
+            utils.ColorPrint.red(f"✗ Missing required components: {', '.join(missing_required)}")

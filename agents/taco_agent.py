@@ -8,7 +8,7 @@ import torch
 from typing import Tuple, Optional, Any
 
 from .base_taco_agent import BaseTACOAgent
-from .networks import ImageEncoder, Actor, Critic, TACOModule
+from .components import ImageEncoder, Actor, Critic, TACOModule
 
 
 class TACOAgent(BaseTACOAgent):

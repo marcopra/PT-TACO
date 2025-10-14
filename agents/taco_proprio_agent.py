@@ -8,7 +8,7 @@ import torch
 from typing import Tuple, Optional, Any, Dict, List
 
 from .base_taco_agent import BaseTACOAgent
-from .networks import ProprioceptiveEncoder, Actor, Critic, TACOModule
+from .components import ProprioceptiveEncoder, Actor, Critic, TACOModule
 
 
 class TACOProprioAgent(BaseTACOAgent):

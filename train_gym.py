@@ -40,23 +40,14 @@ class Workspace:
         self.device = torch.device(cfg.device)
         self.setup()
 
-
         # Get observation and action specs for the agent
-        print("Observation key for the agent:", self.cfg.observation_key if hasattr(self.cfg, 'observation_key') else 'observation', hasattr(self.cfg, 'observation_key'))
-        if hasattr(cfg, 'observation_key'):
-            if self.cfg.observation_key=='proprio_observation':
-                print("Using proprio_observation as observation key for the agent.")
-                obs_spec = gym_env.proprio_observation_spec(self.train_env)
-            elif self.cfg.observation_key=='observation':
-                print("Using observation as observation key for the agent.")
-                obs_spec = gym_env.observation_spec(self.train_env)
-            else:
-                raise ValueError(f"Unknown observation_key {self.cfg.observation_key}")
+        if self.obs_type=='proprio_obs':
+            obs_spec = gym_env.proprio_obs_spec(self.train_env)
+        elif self.obs_type=='pixel_obs':
+            obs_spec = gym_env.pixel_obs_spec(self.train_env)
         else:
-            obs_spec = gym_env.observation_spec(self.train_env)
+            raise ValueError(f"Unknown obs_type {self.cfg.obs_type}")  
         action_spec = gym_env.action_spec(self.train_env)
-
-    
 
         self.agent = make_agent(obs_spec, action_spec, self.cfg.agent)
         self.timer = utils.Timer()
@@ -100,23 +91,26 @@ class Workspace:
                                 self.cfg.action_repeat, self.cfg.seed, self.cfg.resolution, self.cfg.random_init, self.cfg.random_goal)
 
         sample_time_step = self.train_env.reset()
-        proprio_shape = sample_time_step.proprio_observation.shape
+        proprio_shape = sample_time_step.proprio_obs.shape
 
         # create replay buffer
-        data_specs = (gym_env.observation_spec(self.train_env),
+        data_specs = (gym_env.pixel_obs_spec(self.train_env),
                       gym_env.action_spec(self.train_env),
                       specs.Array((1,), np.float32, 'reward'),
                       specs.Array((1,), np.float32, 'discount'),
-                      specs.Array(proprio_shape, np.float32, 'proprio_observation'))
+                      specs.Array(proprio_shape, np.float32, 'proprio_obs'))
 
         self.replay_storage = ReplayBufferStorage(data_specs,
                                                   self.work_dir / 'buffer')
-        print(f"Observation key for the replay buffer: {self.cfg.observation_key if hasattr(self.cfg, 'observation_key') else 'observation'}")
+        
+        self.obs_type = utils.OBS_KEY_REGISTRY.get(self.cfg.obs_type, self.cfg.obs_type)
+        print(f"Observation key for the replay buffer:")
+        utils.ColorPrint.blue(f"{self.obs_type}")
 
         self.replay_loader = make_replay_loader(
             self.work_dir / 'buffer', self.cfg.replay_buffer_size,
             self.cfg.batch_size, self.cfg.replay_buffer_num_workers,
-            self.cfg.save_snapshot, self.cfg.nstep, self.cfg.multistep, self.cfg.discount, observation_key=self.cfg.observation_key if hasattr(self.cfg, 'observation_key') else 'observation')
+            self.cfg.save_snapshot, self.cfg.nstep, self.cfg.multistep, self.cfg.discount, obs_type=self.obs_type)
         self._replay_iter = None
 
         self.video_recorder = VideoRecorder(
@@ -186,7 +180,6 @@ class Workspace:
 
         print(f'Checkpoint saved: {checkpoint_folder} (Step: {step_threshold}, Reward: {current_reward if current_reward is not None else 0})')
 
-
     @property
     def global_step(self):
         return self._global_step
@@ -214,15 +207,11 @@ class Workspace:
             self.video_recorder.init(self.eval_env, enabled=(episode == 0))
             while not time_step.last():
                 with torch.no_grad(), utils.eval_mode(self.agent):
-                    if hasattr(self.cfg, 'observation_key'):
-                        if self.cfg.observation_key=='proprio_observation':
-                            obs = time_step.proprio_observation
-                        elif self.cfg.observation_key=='observation':
-                            obs = time_step.observation
-                        else:
-                            raise ValueError(f"Unknown observation_key {self.cfg.observation_key}")
-                    else:
-                        obs = time_step.observation
+                    if self.obs_type=='proprio_obs':
+                        obs = time_step.proprio_obs
+                    elif self.obs_type=='pixel_obs':
+                        obs = time_step.pixel_obs
+   
                     action = self.agent.act(obs,
                                             self.global_step,
                                             eval_mode=True)
@@ -267,7 +256,7 @@ class Workspace:
         episode_step, episode_reward = 0, 0
         time_step = self.train_env.reset()
         self.replay_storage.add(time_step)
-        self.train_video_recorder.init(time_step.observation)
+        self.train_video_recorder.init(time_step.pixel_obs)
         metrics = None
 
         while train_until_step(self.global_step):
@@ -306,7 +295,7 @@ class Workspace:
                 # reset env
                 time_step = self.train_env.reset()
                 self.replay_storage.add(time_step)
-                self.train_video_recorder.init(time_step.observation)
+                self.train_video_recorder.init(time_step.pixel_obs)
                 # try to save snapshot
                 if self.cfg.save_snapshot:
                     self.save_snapshot()
@@ -321,15 +310,10 @@ class Workspace:
 
             # sample action
             with torch.no_grad(), utils.eval_mode(self.agent):
-                if hasattr(self.cfg, 'observation_key'):
-                    if self.cfg.observation_key=='proprio_observation':
-                        obs = time_step.proprio_observation
-                    elif self.cfg.observation_key=='observation':
-                        obs = time_step.observation
-                    else:
-                        raise ValueError(f"Unknown observation_key {self.cfg.observation_key}")
-                else:
-                    obs = time_step.observation
+                if self.obs_type=='proprio_obs':
+                        obs = time_step.proprio_obs
+                elif self.obs_type=='pixel_obs':
+                    obs = time_step.pixel_obs
                 action = self.agent.act(obs,
                                         self.global_step,
                                         eval_mode=False)
@@ -353,7 +337,7 @@ class Workspace:
             time_step = self.train_env.step(action)
             episode_reward += time_step.reward
             self.replay_storage.add(time_step)
-            self.train_video_recorder.record(time_step.observation)
+            self.train_video_recorder.record(time_step.pixel_obs)
             episode_step += 1
             self._global_step += 1
 

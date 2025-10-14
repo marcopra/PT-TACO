@@ -13,7 +13,7 @@ import itertools
 import utils
 
 from .base_agent import BaseAgent
-from .networks import RandomShiftsAug, Actor, Critic, TACOModule
+from .components import RandomShiftsAug, Actor, Critic, TACOModule
 
 
 class BaseTACOAgent(BaseAgent):

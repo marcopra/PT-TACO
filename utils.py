@@ -9,13 +9,25 @@ import torch.nn.functional as F
 from omegaconf import OmegaConf
 from torch import distributions as pyd
 from torch.distributions.utils import _standard_normal
-
+import envs.gym_env as gym
 try:
     from tabulate import tabulate
 except ImportError:
     print("Warning: tabulate not installed. Install with: pip install tabulate")
     tabulate = None
 
+
+OBS_KEY_REGISTRY = {
+    'pixels': 'pixel_obs',
+    'proprioception': 'proprio_obs',
+    'states': 'proprio_obs',
+    'image': 'pixel_obs',
+}
+
+DOMAIN_KEY_REGISTRY = {
+    'gym': gym,
+    # add other domain mappings if necessary
+}   
 
 ### input shape: (batch_size, length, action_dim)
 ### output shape: (batch_size, action_dim)

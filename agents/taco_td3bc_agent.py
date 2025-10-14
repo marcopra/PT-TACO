@@ -217,7 +217,7 @@ class TACOTD3BCAgent(TACOProprioAgent):
     def build_networks(self):
         """Build networks for TD3BC agent."""
         # First build encoder and TACO from parent
-        from .networks import ProprioceptiveEncoder, TACOModule
+        from .components import ProprioceptiveEncoder, TACOModule
         
         self.encoder = ProprioceptiveEncoder(
             self.obs_shape,

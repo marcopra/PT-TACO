@@ -21,6 +21,7 @@ save_snapshot: false
 # replay buffer
 replay_buffer_size: 500000
 replay_buffer_num_workers: 4
+multistep: 3
 nstep: 3
 batch_size: 256
 # misc
