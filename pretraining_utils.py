@@ -6,6 +6,7 @@ import numpy as np
 import tempfile
 import os
 from utils import *
+import wandb
 
 def format_pretrained_path(feature_extractor):
     """Format pretrained_path based on feature extractor type"""
@@ -468,10 +469,6 @@ class MetricsLogger:
             'eval/taco_loss',
             'eval/total_loss',
             'eval/batch_reward',
-            'eval/avg_rew_pred_error_percentage',
-            'eval/log_cosh',
-            'eval/rel_error_filtered',
-            'eval/smape',
         ]
     
     def create_eval_metrics_dict(self):
@@ -495,7 +492,6 @@ class MetricsLogger:
     def log_to_wandb(self, metrics):
         """Log metriche su wandb"""
         if self.use_wandb:
-            import wandb
             wandb.log(metrics)
     
     def print_training_metrics(self, metrics, epoch, batch_idx, steps, total_batches=None):
@@ -505,7 +501,6 @@ class MetricsLogger:
             display_metrics['steps'] = steps
             display_metrics['epoch'] = epoch
             display_metrics['batch_idx'] = batch_idx + 1
-            from utils import print_metrics_table
             print_metrics_table(display_metrics, f"Training Metrics - Epoch {epoch}, Batch {batch_idx + 1}")
         elif (batch_idx + 1) % self.log_frequency == 0:
             batch_info = f"/{total_batches}" if total_batches else ""
@@ -513,7 +508,7 @@ class MetricsLogger:
     
     def print_eval_metrics(self, metrics, epoch, steps):
         """Stampa metriche di valutazione"""
-        from utils import print_metrics_table
+        
         print_metrics_table(metrics, f"Validation Metrics - Epoch {epoch}, Step {steps}")
 
 
@@ -526,19 +521,13 @@ class ModelCheckpointer:
         self.cfg = cfg
         self.best_eval_loss = float('inf')
         self.best_model_path = None
-        
+        self.dataset_name= '_'.join(self.dataset_config.split('/')[self.dataset_config.split('/').index('dataset') + 1:])
+        self.curl_str = "curl" if self.cfg.curl else "nocurl"
+        self.reward_str = "rew" if self.cfg.reward else "norew"
+        self.optimizer_str = f"_{self.cfg.optimizer}" if self.cfg.optimizer != "adam" else ""
+        # extractor_str = f"_{self.cfg.feature_extractor}" if self.cfg.feature_extractor != "conv" else ""
         # Crea directory di salvataggio
         os.makedirs(save_path, exist_ok=True)
-    
-    def _get_filename_components(self):
-        """Estrae componenti per il nome del file"""
-        curl_str = "curl" if self.cfg.curl else "nocurl"
-        reward_str = "rew" if self.cfg.reward else "norew"
-        optimizer_str = f"_{self.cfg.optimizer}" if self.cfg.optimizer != "adam" else ""
-        # extractor_str = f"_{self.cfg.feature_extractor}" if self.cfg.feature_extractor != "conv" else ""
-        dataset_name = '_'.join(self.dataset_config.split('/')[1:])
-        
-        return curl_str, reward_str, optimizer_str, dataset_name
     
     def _create_checkpoint_dict(self, agent, steps, epoch, pretrained_path, best_eval_loss=None):
         """Crea dizionario con i dati del checkpoint"""
@@ -560,10 +549,10 @@ class ModelCheckpointer:
     
     def save_checkpoint(self, agent, steps, epoch, pretrained_path):
         """Salva checkpoint regolare"""
-        curl_str, reward_str, optimizer_str, dataset_name = self._get_filename_components()
-        
-        checkpoint_path = f"{self.save_path}/taco_ST_{dataset_name}_lr={self.cfg.lr}{optimizer_str}_ts={steps}_{curl_str}_{reward_str}.pt"
-        
+
+
+        checkpoint_path = f"{self.save_path}/taco_ST_{self.dataset_name}_lr{self.cfg.lr}{self.optimizer_str}_ts{steps}_{self.curl_str}_{self.reward_str}.pt"
+
         print(f"Saving checkpoint at step {steps} to {checkpoint_path}")
         
         checkpoint = self._create_checkpoint_dict(agent, steps, epoch, pretrained_path)
@@ -583,12 +572,10 @@ class ModelCheckpointer:
         if self.best_model_path is not None and os.path.exists(self.best_model_path):
             print(f"Deleting previous best model: {self.best_model_path}")
             os.remove(self.best_model_path)
-        
-        # Salva nuovo miglior modello
-        curl_str, reward_str, optimizer_str, dataset_name = self._get_filename_components()
-        
-        self.best_model_path = f"{self.save_path}/taco_ST_{dataset_name}_lr={self.cfg.lr}{optimizer_str}_ts={steps}_{curl_str}_{reward_str}_best.pt"
-        
+
+
+        self.best_model_path = f"{self.save_path}/taco_ST_{self.dataset_name}_lr{self.cfg.lr}{self.optimizer_str}_ts{steps}_{self.curl_str}_{self.reward_str}_best.pt"
+
         print(f"Saving new best model to {self.best_model_path} at step {steps}")
         
         checkpoint = self._create_checkpoint_dict(agent, steps, epoch, pretrained_path, self.best_eval_loss)
@@ -598,10 +585,9 @@ class ModelCheckpointer:
     
     def save_final_model(self, agent, steps, epoch, pretrained_path):
         """Salva il modello finale a fine training"""
-        curl_str, reward_str, optimizer_str, extractor_str, dataset_name = self._get_filename_components()
-        
-        final_path = f"{self.save_path}/taco_ST{extractor_str}_{dataset_name}_lr={self.cfg.lr}{optimizer_str}_ts={steps}_{curl_str}_{reward_str}_final.pt"
-        
+       
+        final_path = f"{self.save_path}/taco_ST_{self.dataset_name}_lr{self.cfg.lr}{self.optimizer_str}_ts{steps}_{self.curl_str}_{self.reward_str}_final.pt"
+
         print(f"Saving final model to {final_path}")
         
         checkpoint = self._create_checkpoint_dict(agent, steps, epoch, pretrained_path)

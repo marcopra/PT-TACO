@@ -7,7 +7,7 @@ DrQV2 (Data-Regularized Q-Learning V2) agent for visual RL.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Tuple, Optional, Dict, Any
+from typing import Tuple, Optional, Dict, Any, Union
 import utils
 
 from .base_agent import BaseAgent
@@ -38,6 +38,9 @@ class DrQV2Agent(BaseAgent):
         stddev_clip: float,
         use_tb: bool,
         pretrained_path: Optional[str] = None,
+        load_encoder: bool = True,
+        load_actor: bool = False,
+        load_critic: bool = False,
         freeze_encoder: bool = False
     ):
         """
@@ -77,7 +80,11 @@ class DrQV2Agent(BaseAgent):
         self.update_every_steps = update_every_steps
         self.stddev_schedule = stddev_schedule
         self.stddev_clip = stddev_clip
-        
+
+        self.load_encoder = load_encoder
+        self.load_actor = load_actor
+        self.load_critic = load_critic
+
         # Build networks
         self.build_networks()
         
@@ -94,30 +101,36 @@ class DrQV2Agent(BaseAgent):
         else:
             self.aug = nn.Identity()
 
-        # Load pretrained weights if provided
-        if pretrained_path is not None and pretrained_path.lower() != 'none':
-            print(f"Loading pretrained model from {pretrained_path}, "
-                  f"freeze encoder: {freeze_encoder}")
-            self.load_pretrained(pretrained_path, None, freeze_encoder)
-        else:
-            print("No pretrained model provided, initializing from scratch.")
-        
+        if self.pretrained_path is not None and self.pretrained_path != "none":
+            self._load_components(
+                self.pretrained_path,
+                load_encoder=load_encoder,
+                load_actor=load_actor,
+                load_critic=load_critic
+            )
         # Set training mode
         self.train()
         self.critic_target.train()
     
     def build_networks(self):
         """Build all neural networks for the agent."""
+        self.build_encoders()
+        self.build_actor_critic()
+    
+    
+    def build_encoders(self):
         # Image encoder
         if self.obs_type == 'pixel_obs':
             self.encoder = ImageEncoder(self.obs_shape, self.feature_dim).to(self.device)
         elif self.obs_type == 'proprio_obs':
             self.encoder = nn.Identity().to(self.device)
             self.encoder.repr_dim = self.obs_shape[0]
+            self.encoder.eval()
         else:
             raise ValueError(f"Unsupported observation type: {self.obs_type}")
-        
-        # Actor
+    
+    def build_actor_critic(self):
+        ## Actor
         self.actor = Actor(
             self.encoder.repr_dim,
             self.action_shape,
@@ -152,41 +165,39 @@ class DrQV2Agent(BaseAgent):
     
     def _load_components(
         self,
-        checkpoint: Dict[str, Any],
+        models_path: Union[Dict[str, Any], str],
         load_encoder: bool,
         load_actor: bool,
         load_critic: bool,
-        freeze_encoder: bool
     ):
         """
-        Load specified components from checkpoint.
+        Load specified components from models_path.
         
         Args:
-            checkpoint: Loaded checkpoint dictionary
+            models_path: Loaded models_path dictionary or string path
             load_encoder: Whether to load encoder weights
             load_actor: Whether to load actor weights
             load_critic: Whether to load critic weights
             freeze_encoder: Whether encoder will be frozen
         """
-        if load_encoder and 'encoder' in checkpoint:
+
+        if isinstance(models_path, str):
+            checkpoint = torch.load(models_path, map_location=self.device, weights_only=False)
+        else:
+            checkpoint = models_path
+
+        if load_encoder and not isinstance(self.encoder, nn.Identity):
             self.encoder.load_state_dict(checkpoint['encoder'])
             utils.ColorPrint.green("✓ Encoder loaded from checkpoint")
-        else:
-            raise ValueError("Encoder weights must be loaded for DrQV2.")
-        if load_actor and 'actor' in checkpoint:
+
+        if load_actor:
             self.actor.load_state_dict(checkpoint['actor'])
             utils.ColorPrint.green("✓ Actor loaded from checkpoint")
-        else:
-            raise ValueError("Actor weights must be loaded for DrQV2.")
-        if load_critic and 'critic' in checkpoint:
+
+        if load_critic:
             self.critic.load_state_dict(checkpoint['critic'])
             self.critic_target.load_state_dict(checkpoint['critic'])
             utils.ColorPrint.green("✓ Critic loaded from checkpoint")
-        else:
-            raise ValueError("Critic weights must be loaded for DrQV2.")
-    
-        if freeze_encoder and load_encoder:
-            self._freeze_encoder()
     
     def _freeze_encoder(self):
         return super()._freeze_encoder()

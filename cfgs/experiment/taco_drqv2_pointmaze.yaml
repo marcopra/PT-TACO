@@ -4,8 +4,8 @@
 
 defaults:
   - override /task@_global_: PointMaze_MediumDense
-  - override /agent@_global_: drqv2
-  - override /wrapper@_global_: taco_wrapper
+  - override /agent: drqv2
+  - override /wrapper: taco_wrapper
 
 # Experiment name
 exp_name: taco_drqv2_pointmaze_base

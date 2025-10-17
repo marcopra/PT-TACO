@@ -275,7 +275,7 @@ class Workspace:
         metrics = None
 
         while train_until_step(self.global_step):
-            self.check_and_save_step_checkpoints(episode_reward)
+            # self.check_and_save_step_checkpoints(episode_reward)
 
             if time_step.last():
                 self._global_episode += 1

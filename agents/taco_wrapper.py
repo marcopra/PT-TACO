@@ -6,12 +6,14 @@ import utils
 from .components import RandomShiftsAug, ProprioceptiveEncoder
 import itertools
 import utils
+from typing import Tuple, Optional, Dict, Any, Union
 
 class TACOWrapper:
     """Wraps any classical algorithm with TACO enhancements"""
 
     def __init__(self, base_algorithm, encoder_lr, feature_dim,
-                 hidden_dim, reward, multistep, latent_a_dim, curl, pretrained_path=None, freeze_encoder=False, no_enc_auxiliary_losses=False, optimizer_type="adam"):
+                 hidden_dim, reward, multistep, latent_a_dim, curl, 
+                 pretrained_path=None, freeze_encoder=False, no_enc_auxiliary_losses=False, optimizer_type="adam"):
         
         self.base_algorithm = base_algorithm
         self.obs_type = self.base_algorithm.obs_type
@@ -36,15 +38,23 @@ class TACOWrapper:
             latent_a_dim = int(self.action_shape[0]*1.25)+1
         ### Create action embeddings
         self.act_tok = utils.ActionEncoding(self.action_shape[0], latent_a_dim, multistep)
-        if hasattr(self.base_algorithm, 'encoder'):
+
+        # Initialize encoder
+        if hasattr(self.base_algorithm, 'encoder') and not isinstance(self.base_algorithm.encoder, nn.Identity): # Assume that every vision based algorithm has an encoder attribute, and prioprio based algorithm always use Identity
             self.encoder = self.base_algorithm.encoder
+            self.load_encoder = False
         else:
             assert self.obs_type == 'proprio_obs', "With image observations, an encoder must be provided in the base algorithm."
             self.encoder = ProprioceptiveEncoder(self.obs_shape, feature_dim).to(self.device)
+            self.base_algorithm.encoder = self.encoder  
+            self.load_encoder = self.base_algorithm.load_encoder
+            self.base_algorithm.build_actor_critic()  # We need to rebuild actor critic to match the new encoder output size
+
         
         self.actor = self.base_algorithm.actor
         self.critic = self.base_algorithm.critic
-        self.critic_target = self.base_algorithm.critic_target
+        if hasattr(self.base_algorithm, 'critic_target'):
+            self.critic_target = self.base_algorithm.critic_target
 
         self.TACO = TACO(self.encoder.repr_dim, feature_dim, self.action_shape, latent_a_dim, hidden_dim, self.act_tok, self.encoder, self.multistep, self.device).to(self.device)
         self.freeze_encoder = freeze_encoder
@@ -77,17 +87,45 @@ class TACOWrapper:
         else:
             self.aug = nn.Identity()
 
-        if pretrained_path is not None and pretrained_path != 'none':
-            raise NotImplementedError("Loading from pretrained not implemented yet.")
+        if pretrained_path is not None and pretrained_path != 'none' and self.load_encoder:
+            self._load_components(pretrained_path)
         if freeze_encoder:
-            raise NotImplementedError("Freezing encoder not implemented yet.")  
-        if no_enc_auxiliary_losses:
-            raise NotImplementedError("No-TACO mode not implemented yet.")
+            self._freeze_encoder()
         
         self.pretrained_path = pretrained_path
         self.train()
-        utils.ColorPrint.green("Initialized TACO Wrapper")
-    
+        utils.ColorPrint.green("Using TACO Wrapper")
+
+    def _load_components(self, models_path: Union[str, Dict[str, Any]]):
+        utils.ColorPrint.blue(f"Loading pretrained model from: {models_path}")
+
+        if isinstance(models_path, str):
+            checkpoint = torch.load(models_path, map_location=self.device, weights_only=False)
+        else:
+            checkpoint = models_path
+
+        print("Loading encoder weights...")
+        self.TACO.load_state_dict(checkpoint['taco'])
+        utils.ColorPrint.green("✓  Loaded pretrained TACO model.")
+        
+        if isinstance(self.encoder, ProprioceptiveEncoder):
+            self.encoder.load_state_dict(checkpoint['encoder'])
+            utils.ColorPrint.green("✓  Loaded pretrained encoder.")
+        
+        self.act_tok.load_state_dict(checkpoint['act_tok'])
+        utils.ColorPrint.green("✓  Loaded pretrained action tokenizer.")
+            
+    def _freeze_encoder(self):
+        self.encoder.eval()
+        for param in self.encoder.parameters():
+            param.requires_grad = False
+        
+        self.act_tok.eval()
+        for param in self.act_tok.parameters():
+            param.requires_grad = False
+        
+        utils.ColorPrint.blue("🔒 Encoder components frozen")
+
     def train(self, training=True):
         self.training = training
         self.base_algorithm.train(training)
@@ -166,6 +204,9 @@ class TACOWrapper:
         
         if self.use_tb:
             metrics['batch_reward'] = reward.mean().item()
+        
+        if self.no_enc_auxiliary_losses:
+            return metrics
         
         metrics.update(self.update_taco(obs, action, action_seq, r_next_obs, reward))
         return metrics

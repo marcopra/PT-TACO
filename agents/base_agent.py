@@ -115,65 +115,27 @@ class BaseAgent(ABC):
         """
         self.training = training
         
-    def load_pretrained(
-        self,
-        model_path: str,
-        load_encoder: bool = True,
-        load_actor: bool = False,
-        load_critic: bool = False,
-        map_location: Optional[torch.device] = None,
-        freeze_encoder: bool = False
-    ) -> Dict[str, Any]:
-        """
-        Load a pretrained model from checkpoint.
-        
-        Args:
-            model_path: Path to the saved model checkpoint
-            load_encoder: Whether to load encoder weights
-            load_actor: Whether to load actor weights
-            load_critic: Whether to load critic weights
-            map_location: Optional device mapping for torch.load
-            freeze_encoder: Whether to freeze loaded components
-            
-        Returns:
-            Dictionary of saved arguments from checkpoint
-        """
-        if map_location is None:
-            map_location = self.device
-            
-        utils.ColorPrint.blue(f"Loading pretrained model from: {model_path}")
-        checkpoint = torch.load(model_path, map_location=map_location, weights_only=False)
-        
-        # Let subclasses handle specific loading
-        self._load_components(checkpoint, load_encoder, load_actor, load_critic, freeze_encoder)
-        
-        if freeze_encoder:
-            self._freeze_encoder()
-            
-        utils.ColorPrint.green("✓ Pretrained model loading completed")
-        return checkpoint.get('args', {})
+
     
-    @abstractmethod
-    def _load_components(
-        self,
-        checkpoint: Dict[str, Any],
-        load_encoder: bool,
-        load_actor: bool,
-        load_critic: bool, 
-        freeze_encoder: bool
-    ):
-        """
-        Load specific components from checkpoint.
-        Must be implemented by subclasses.
+    # @abstractmethod
+    # def _load_components(
+    #     self,
+    #     checkpoint: Dict[str, Any],
+    #     load_encoder: bool,
+    #     load_actor: bool,
+    #     load_critic: bool, 
+    # ):
+    #     """
+    #     Load specific components from checkpoint.
+    #     Must be implemented by subclasses.
         
-        Args:
-            checkpoint: Loaded checkpoint dictionary
-            load_encoder: Whether to load encoder weights
-            load_actor: Whether to load actor weights
-            load_critic: Whether to load critic weights
-            freeze_encoder: Whether encoder will be frozen
-        """
-        pass
+    #     Args:
+    #         checkpoint: Loaded checkpoint dictionary
+    #         load_encoder: Whether to load encoder weights
+    #         load_actor: Whether to load actor weights
+    #         load_critic: Whether to load critic weights
+    #     """
+    #     pass
         
        
 

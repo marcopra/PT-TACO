@@ -1,6 +1,10 @@
 defaults:
+  - task@_global_: PointMaze_MediumDense
+  - agent: drqv2
+  - wrapper: null
+  - experiment: null  # Required experiment config - must be specified explicitly or use 'null' for no experiment
   - _self_
-  - agent@_global_: taco_pretrain
+  - override hydra/launcher: submitit_local
 
 # device and general settings
 device: cuda
@@ -8,7 +12,7 @@ seed: 1
 
 
 # dataset settings
-dataset_config: /home/mprattico/Pretrain-TACO/dataset/small_random
+dataset_config: /home/mprattico/Pretrain-TACO/dataset/expert_medium
 train_ratio: 0.8
 
 # training settings
@@ -35,8 +39,7 @@ max_episodes_per_dataset: 100000000000
 max_size: null
 homogeneous: false
 
-# saving settings
-save_path: models/maze/proprio/
+
 
 # wandb settings
 use_wandb: false
@@ -49,15 +52,6 @@ resume_checkpoint: null
 resume_wandb_run: null
 continue_steps: true
 
-# TACO loss settings
-no_curl: false
-no_reward: false
-
-# feature extractor settings
-feature_extractor: conv
-height: 84
-width: 84
-
 # agent level parameters that override agent config
 curl: false
 reward: false
@@ -66,6 +60,8 @@ pretrained_path: none
 freeze_encoder: false
 no_enc_auxiliary_losses: false
 
+
+use_tb: true
 
 
 hydra:

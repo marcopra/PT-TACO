@@ -16,11 +16,17 @@ agent:
   stddev_schedule: ${stddev_schedule}
   stddev_clip: 0.3
   pretrained_path: ${pretrained_path}
+  load_encoder: ${load_encoder}
+  load_actor: ${load_actor}
+  load_critic: ${load_critic}
   freeze_encoder: ${freeze_encoder}
 
 # Override global parameters
 batch_size: 256
 obs_type: proprioception
 pretrained_path: none
+load_encoder: true
+load_actor: false
+load_critic: false
 freeze_encoder: false
 encoder_checkpoint_steps: []
