@@ -1,0 +1,23 @@
+# @package _global_
+
+# Base DrQV2 experiment on PointMaze
+
+defaults:
+  - override /task@_global_: PointMaze_MediumDense
+  - override /agent: drqv2
+  - override /wrapper: taco_wrapper
+
+# Experiment name
+exp_name: taco_drqv2_pointmaze_base
+
+# Observation type
+obs_type: proprioception
+obs_shape: ??? # to be specified later
+action_shape: ??? # to be specified later
+
+
+# saving settings
+save_path: models/
+
+# Pretraining settings
+num_epochs: 1000

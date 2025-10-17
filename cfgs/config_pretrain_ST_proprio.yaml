@@ -63,7 +63,7 @@ reward: false
 latent_a_dim: none
 pretrained_path: none
 freeze_encoder: false
-no_taco: false
+no_enc_auxiliary_losses: false
 
 
 

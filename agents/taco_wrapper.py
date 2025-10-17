@@ -11,7 +11,7 @@ class TACOWrapper:
     """Wraps any classical algorithm with TACO enhancements"""
 
     def __init__(self, base_algorithm, encoder_lr, feature_dim,
-                 hidden_dim, reward, multistep, latent_a_dim, curl, pretrained_path=None, freeze_encoder=False, no_taco=False, optimizer_type="adam"):
+                 hidden_dim, reward, multistep, latent_a_dim, curl, pretrained_path=None, freeze_encoder=False, no_enc_auxiliary_losses=False, optimizer_type="adam"):
         
         self.base_algorithm = base_algorithm
         self.obs_type = self.base_algorithm.obs_type
@@ -48,7 +48,7 @@ class TACOWrapper:
 
         self.TACO = TACO(self.encoder.repr_dim, feature_dim, self.action_shape, latent_a_dim, hidden_dim, self.act_tok, self.encoder, self.multistep, self.device).to(self.device)
         self.freeze_encoder = freeze_encoder
-        self.no_taco = no_taco
+        self.no_enc_auxiliary_losses = no_enc_auxiliary_losses
         ### State & Action Encoders
         parameters = itertools.chain(self.encoder.parameters(),
                                      self.act_tok.parameters(),
@@ -64,7 +64,7 @@ class TACOWrapper:
         
         if not self.freeze_encoder:
             self.encoder_opt = optimizer_class(parameters, lr=encoder_lr)
-            if not self.no_taco:
+            if not self.no_enc_auxiliary_losses:
                 self.taco_opt = optimizer_class(self.TACO.parameters(), lr=encoder_lr)
 
         self.cross_entropy_loss = nn.CrossEntropyLoss()
@@ -81,7 +81,7 @@ class TACOWrapper:
             raise NotImplementedError("Loading from pretrained not implemented yet.")
         if freeze_encoder:
             raise NotImplementedError("Freezing encoder not implemented yet.")  
-        if no_taco:
+        if no_enc_auxiliary_losses:
             raise NotImplementedError("No-TACO mode not implemented yet.")
         
         self.pretrained_path = pretrained_path
@@ -168,4 +168,46 @@ class TACOWrapper:
             metrics['batch_reward'] = reward.mean().item()
         
         metrics.update(self.update_taco(obs, action, action_seq, r_next_obs, reward))
+        return metrics
+    
+    def evaluate_taco(self, obs, action, action_seq, next_obs, reward):
+        with torch.no_grad():
+            metrics = dict()
+            metrics['batch_reward'] = reward.mean().item()
+            
+            obs_anchor = self.aug(obs.float())
+            obs_pos = self.aug(obs.float())
+            z_a = self.TACO.encode(obs_anchor)
+            z_pos = self.TACO.encode(obs_pos, ema=True)
+            ### Compute CURL loss
+            if self.curl:
+                logits = self.TACO.compute_logits(z_a, z_pos)
+                labels = torch.arange(logits.shape[0]).long().to(self.device)
+                curl_loss = self.cross_entropy_loss(logits, labels)
+            else:
+                curl_loss = torch.tensor(0.)
+            
+            ### Compute action encodings
+            action_en = self.TACO.act_tok(action, seq=False) 
+            action_seq_en = self.TACO.act_tok(action_seq, seq=True)
+            
+            ### Compute reward prediction loss
+            if self.reward:
+                reward_pred = self.TACO.reward(torch.concat([z_a, action_seq_en], dim=-1))
+                reward_loss = F.mse_loss(reward_pred, reward)
+            else:
+                reward_loss = torch.tensor(0.)
+            
+            ### Compute TACO loss
+            next_z = self.TACO.encode(self.aug(next_obs.float()), ema=True)
+            curr_za = self.TACO.project_sa(z_a, action_seq_en) 
+            logits = self.TACO.compute_logits(curr_za, next_z)
+            labels = torch.arange(logits.shape[0]).long().to(self.device)
+            taco_loss = self.cross_entropy_loss(logits, labels)
+            
+            if self.use_tb:
+                metrics['reward_loss']  = reward_loss.item()
+                metrics['curl_loss'] = curl_loss.item()
+                metrics['taco_loss']  = taco_loss.item()
+                metrics['total_loss'] = taco_loss.item() + curl_loss.item() + reward_loss.item()
         return metrics

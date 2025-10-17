@@ -24,6 +24,13 @@ OBS_KEY_REGISTRY = {
     'image': 'pixel_obs',
 }
 
+PRETRAINING_OBS_KEY_REGISTRY = { # TODO unify with OBS_KEY_REGISTRY, generate dataset accordingly
+    'pixels': 'observation',
+    'proprioception': 'proprio_observation',
+    'states': 'proprio_observation',
+    'image': 'observation',
+}
+
 DOMAIN_KEY_REGISTRY = {
     'gym': gym,
     # add other domain mappings if necessary

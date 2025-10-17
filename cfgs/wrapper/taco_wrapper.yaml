@@ -1,3 +1,5 @@
+# @package _global_
+
 wrapper:
   _target_: agents.taco_wrapper.TACOWrapper
   encoder_lr: ${encoder_lr}
@@ -9,5 +11,5 @@ wrapper:
   curl: false
   pretrained_path: ${pretrained_path}
   freeze_encoder: ${freeze_encoder}
-  no_taco: false
+  no_enc_auxiliary_losses: false
   optimizer_type: adam

@@ -1,0 +1,33 @@
+# @package _global_
+
+agent:
+  _target_: agents.components.TACOPretrainAgent
+  obs_shape: ???  # to be specified at runtime
+  action_shape: ???  # to be specified at runtime
+  device: ${device}
+  
+  # Encoder settings
+  encoder_lr: ${encoder_lr}
+  feature_dim: ${feature_dim}
+  
+  # TACO settings
+  hidden_dim: ${hidden_dim}
+  multistep: ${multistep}
+  latent_a_dim: ${latent_a_dim}
+  
+  # Loss components
+  curl: ${curl}
+  reward: ${reward}
+  
+  # Optimizer settings
+  optimizer: ${optimizer}
+  
+  # Pretraining settings
+  pretrained_path: ${pretrained_path}
+  freeze_encoder: ${freeze_encoder}
+  no_enc_auxiliary_losses: ${no_enc_auxiliary_losses}
+  
+  # Feature extractor
+  feature_extractor: ${feature_extractor}
+  height: ${height}
+  width: ${width}

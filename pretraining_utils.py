@@ -28,6 +28,28 @@ def format_pretrained_path(feature_extractor):
     return extractor_map.get(feature_extractor, f"{feature_extractor}_scratch")
 
 
+def extract_dataset_name_from_path(dataset_config):
+    config_path = Path(dataset_config)
+
+    if config_path.suffix == '.json':
+        # For JSON config, get dataset info from the config itself
+        with open(config_path, 'r') as f:
+            config_data = json.load(f)
+        # For single task, we expect the dataset path directly or in a simple format
+        if 'dataset_path' in config_data:
+            dataset_path = config_data['dataset_path']
+            dataset_names = [extract_task_name_from_path(dataset_path)]
+        elif 'pretraining_datasets' in config_data:
+            dataset_dirs = config_data.get('pretraining_datasets', [])
+            dataset_names = [extract_task_name_from_path(d) for d in dataset_dirs]
+        else:
+            dataset_names = ['single_task']
+        print(f"Single task dataset config: {dataset_names}")
+    else:
+        # For folder-based config, assume the dataset is directly in the provided path
+        dataset_path = dataset_config
+        dataset_names = [extract_task_name_from_path(dataset_path)]
+        print(f"Single task dataset path: {dataset_path}")
 def extract_task_name_from_path(dataset_path):
     """Extract task name from dataset path (same logic as generate_config.py)"""
     dataset_path = Path(dataset_path)
@@ -277,7 +299,7 @@ def load_unified_dataset(config_or_path, batch_size=32, num_workers=4,
 def load_single_task_dataset(config_or_path, batch_size=32, num_workers=4,
                              nstep=3, multistep=3, discount=0.99, 
                              max_episodes_per_dataset=8, max_size=None,
-                             homogeneous=False, train_ratio=0.8, use_training_split=True, observation_key='observation'):
+                             homogeneous=False, train_ratio=0.8, use_training_split=True, obs_type='observation'):
     """
     Load single task dataset and split into train/validation
     
@@ -358,7 +380,7 @@ def load_single_task_dataset(config_or_path, batch_size=32, num_workers=4,
             nstep=nstep,
             multistep=multistep,
             discount=discount,
-            observation_key=observation_key
+            obs_type=obs_type
         )
         return loader
     
@@ -385,7 +407,7 @@ def load_single_task_dataset(config_or_path, batch_size=32, num_workers=4,
             nstep=nstep,
             multistep=multistep,
             discount=discount,
-            observation_key=observation_key
+            obs_type=obs_type
         )
         
         return loader
@@ -397,3 +419,192 @@ def load_single_task_dataset(config_or_path, batch_size=32, num_workers=4,
             print(f"Temporary directory {temp_dir} cleaned up successfully")
         except Exception as e:
             ColorPrint.yellow(f"Warning: Could not cleanup temporary directory {temp_dir}: {e}")
+
+def get_dataloaders(cfg, obs_type, multi_task=False):
+    """Get training and validation dataloaders for single task pretraining"""
+    train_loader = load_single_task_dataset(
+        config_or_path=cfg.dataset_config,
+        batch_size=cfg.batch_size,
+        num_workers=cfg.num_workers,
+        nstep=cfg.nstep,
+        multistep=cfg.multistep,
+        discount=cfg.discount,
+        max_episodes_per_dataset=cfg.max_episodes_per_dataset,
+        max_size=cfg.max_size,
+        homogeneous=cfg.homogeneous,
+        train_ratio=cfg.train_ratio,
+        use_training_split=True,
+        obs_type=obs_type
+    )
+    
+    valid_loader = load_single_task_dataset(
+        config_or_path=cfg.dataset_config,
+        batch_size=cfg.batch_size,
+        num_workers=cfg.num_workers,
+        nstep=cfg.nstep,
+        multistep=cfg.multistep,
+        discount=cfg.discount,
+        max_episodes_per_dataset=cfg.max_episodes_per_dataset,
+        max_size=None,  # No size limit for validation
+        homogeneous=cfg.homogeneous,
+        train_ratio=cfg.train_ratio,
+        use_training_split=False,
+        obs_type=obs_type
+    )
+    
+    if multi_task:
+        raise NotImplementedError("Multi-task loading not implemented in this function")
+    return train_loader, valid_loader, None  # No test loader for single task
+class MetricsLogger:
+    """Gestisce la raccolta, aggregazione e logging delle metriche"""
+    
+    def __init__(self, use_wandb=False, log_every=None, log_frequency=100):
+        self.use_wandb = use_wandb
+        self.log_every = log_every
+        self.log_frequency = log_frequency
+        self.eval_metrics_keys = [
+            'eval/reward_loss',
+            'eval/curl_loss', 
+            'eval/taco_loss',
+            'eval/total_loss',
+            'eval/batch_reward',
+            'eval/avg_rew_pred_error_percentage',
+            'eval/log_cosh',
+            'eval/rel_error_filtered',
+            'eval/smape',
+        ]
+    
+    def create_eval_metrics_dict(self):
+        """Crea dizionario per accumulare metriche di valutazione"""
+        return {key: 0 for key in self.eval_metrics_keys}
+    
+    def accumulate_eval_metrics(self, metrics_sum, eval_metrics, cfg):
+        """Accumula metriche di valutazione da un batch"""
+        metrics_sum['eval/reward_loss'] += eval_metrics['reward_loss']
+        if 'curl_loss' in eval_metrics:
+            metrics_sum['eval/curl_loss'] += eval_metrics['curl_loss']
+        metrics_sum['eval/taco_loss'] += eval_metrics['taco_loss']
+        metrics_sum['eval/batch_reward'] += eval_metrics['batch_reward']
+        metrics_sum['eval/total_loss'] += eval_metrics['total_loss']
+    
+    
+    def average_metrics(self, metrics_sum, num_batches):
+        """Calcola la media delle metriche"""
+        return {key: value / num_batches for key, value in metrics_sum.items()}
+    
+    def log_to_wandb(self, metrics):
+        """Log metriche su wandb"""
+        if self.use_wandb:
+            import wandb
+            wandb.log(metrics)
+    
+    def print_training_metrics(self, metrics, epoch, batch_idx, steps, total_batches=None):
+        """Stampa metriche di training"""
+        if self.log_every and (batch_idx + 1) % self.log_every == 0:
+            display_metrics = metrics.copy()
+            display_metrics['steps'] = steps
+            display_metrics['epoch'] = epoch
+            display_metrics['batch_idx'] = batch_idx + 1
+            from utils import print_metrics_table
+            print_metrics_table(display_metrics, f"Training Metrics - Epoch {epoch}, Batch {batch_idx + 1}")
+        elif (batch_idx + 1) % self.log_frequency == 0:
+            batch_info = f"/{total_batches}" if total_batches else ""
+            print(f"Epoch: {epoch}/{epoch}, Batch: {batch_idx + 1}{batch_info}, Steps: {steps}, Loss: {metrics.get('total_loss', 'N/A'):.6f}")
+    
+    def print_eval_metrics(self, metrics, epoch, steps):
+        """Stampa metriche di valutazione"""
+        from utils import print_metrics_table
+        print_metrics_table(metrics, f"Validation Metrics - Epoch {epoch}, Step {steps}")
+
+
+class ModelCheckpointer:
+    """Gestisce il salvataggio dei checkpoint e del miglior modello"""
+    
+    def __init__(self, save_path, dataset_config, cfg):
+        self.save_path = save_path
+        self.dataset_config = dataset_config
+        self.cfg = cfg
+        self.best_eval_loss = float('inf')
+        self.best_model_path = None
+        
+        # Crea directory di salvataggio
+        os.makedirs(save_path, exist_ok=True)
+    
+    def _get_filename_components(self):
+        """Estrae componenti per il nome del file"""
+        curl_str = "curl" if self.cfg.curl else "nocurl"
+        reward_str = "rew" if self.cfg.reward else "norew"
+        optimizer_str = f"_{self.cfg.optimizer}" if self.cfg.optimizer != "adam" else ""
+        # extractor_str = f"_{self.cfg.feature_extractor}" if self.cfg.feature_extractor != "conv" else ""
+        dataset_name = '_'.join(self.dataset_config.split('/')[1:])
+        
+        return curl_str, reward_str, optimizer_str, dataset_name
+    
+    def _create_checkpoint_dict(self, agent, steps, epoch, pretrained_path, best_eval_loss=None):
+        """Crea dizionario con i dati del checkpoint"""
+        checkpoint = {
+            'encoder': agent.encoder.state_dict(),
+            'taco': agent.TACO.state_dict(),
+            'act_tok': agent.act_tok.state_dict(),
+            'args': OmegaConf.to_container(self.cfg, resolve=True),
+            'steps': steps,
+            'epoch': epoch,
+            # 'feature_extractor': self.cfg.feature_extractor,
+            'pretrained_path': pretrained_path,
+        }
+        
+        if best_eval_loss is not None:
+            checkpoint['best_eval_loss'] = best_eval_loss
+        
+        return checkpoint
+    
+    def save_checkpoint(self, agent, steps, epoch, pretrained_path):
+        """Salva checkpoint regolare"""
+        curl_str, reward_str, optimizer_str, dataset_name = self._get_filename_components()
+        
+        checkpoint_path = f"{self.save_path}/taco_ST_{dataset_name}_lr={self.cfg.lr}{optimizer_str}_ts={steps}_{curl_str}_{reward_str}.pt"
+        
+        print(f"Saving checkpoint at step {steps} to {checkpoint_path}")
+        
+        checkpoint = self._create_checkpoint_dict(agent, steps, epoch, pretrained_path)
+        torch.save(checkpoint, checkpoint_path)
+        
+        return checkpoint_path
+    
+    def save_best_model(self, agent, steps, epoch, pretrained_path, eval_loss):
+        """Salva il miglior modello se migliora la loss di validazione"""
+        if eval_loss >= self.best_eval_loss:
+            return False
+        
+        print(f"New best model found! eval/total_loss: {eval_loss:.6f} (previous best: {self.best_eval_loss:.6f})")
+        self.best_eval_loss = eval_loss
+        
+        # Elimina modello precedente
+        if self.best_model_path is not None and os.path.exists(self.best_model_path):
+            print(f"Deleting previous best model: {self.best_model_path}")
+            os.remove(self.best_model_path)
+        
+        # Salva nuovo miglior modello
+        curl_str, reward_str, optimizer_str, dataset_name = self._get_filename_components()
+        
+        self.best_model_path = f"{self.save_path}/taco_ST_{dataset_name}_lr={self.cfg.lr}{optimizer_str}_ts={steps}_{curl_str}_{reward_str}_best.pt"
+        
+        print(f"Saving new best model to {self.best_model_path} at step {steps}")
+        
+        checkpoint = self._create_checkpoint_dict(agent, steps, epoch, pretrained_path, self.best_eval_loss)
+        torch.save(checkpoint, self.best_model_path)
+        
+        return True
+    
+    def save_final_model(self, agent, steps, epoch, pretrained_path):
+        """Salva il modello finale a fine training"""
+        curl_str, reward_str, optimizer_str, extractor_str, dataset_name = self._get_filename_components()
+        
+        final_path = f"{self.save_path}/taco_ST{extractor_str}_{dataset_name}_lr={self.cfg.lr}{optimizer_str}_ts={steps}_{curl_str}_{reward_str}_final.pt"
+        
+        print(f"Saving final model to {final_path}")
+        
+        checkpoint = self._create_checkpoint_dict(agent, steps, epoch, pretrained_path)
+        torch.save(checkpoint, final_path)
+        
+        return final_path

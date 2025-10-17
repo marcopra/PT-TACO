@@ -39,44 +39,6 @@ def make_wrapped_agent(obs_spec, action_spec, agent_cfg, wrapper_cfg=None):
 
     return hydra.utils.instantiate(agent_cfg)
 
-# def make_wrapped_agent(obs_spec, action_spec, agent_cfg, wrapper_cfg=None):
-#     """Create wrapped agent with dynamic algorithm selection"""
-    
-#     # Handle nested structure: if agent_cfg has 'agent' key, use that
-#     if hasattr(agent_cfg, 'agent') and agent_cfg.agent is not None:
-#         actual_agent_cfg = agent_cfg.agent
-#     else:
-#         actual_agent_cfg = agent_cfg
-    
-#     # Debug: Print the configuration
-#     print(f"Agent config _target_: {actual_agent_cfg.get('_target_', 'NOT FOUND')}")
-    
-#     # Set obs_shape and action_shape directly on cfg
-#     actual_agent_cfg.obs_shape = obs_spec.shape
-#     actual_agent_cfg.action_shape = action_spec.shape
-    
-#     # Instantiate base algorithm
-#     agent = hydra.utils.instantiate(actual_agent_cfg)
-    
-#     # Check if wrapper is specified
-#     if wrapper_cfg is not None:
-#         print(f"Using wrapper: {wrapper_cfg._target_}")
-        
-#         # Get device from agent_cfg or use default
-#         device = actual_agent_cfg.device if hasattr(actual_agent_cfg, 'device') else 'cuda'
-        
-#         # Wrap with TACO (or other wrapper)
-#         agent = hydra.utils.instantiate(
-#             wrapper_cfg,
-#             base_algorithm=agent,
-#             obs_shape=obs_spec.shape,
-#             action_shape=action_spec.shape,
-#             device=device
-#         )
-    
-#     return agent
-
-
 class Workspace:
     def __init__(self, cfg):
         self.work_dir = Path.cwd()
@@ -96,7 +58,11 @@ class Workspace:
             raise ValueError(f"Unknown obs_type {self.cfg.obs_type}")  
         action_spec = gym_env.action_spec(self.train_env)
         
-        wrapper_cfg = self.cfg.wrapper
+        if hasattr(cfg, 'wrapper') and cfg.wrapper is not None and cfg.wrapper._target_ != 'none':
+            wrapper_cfg = cfg.wrapper
+        else:
+            wrapper_cfg = None
+        
         # Passa l'intera configurazione, non cfg.agent
         self.agent = make_wrapped_agent(obs_spec, action_spec, self.cfg.agent, wrapper_cfg)
         self.timer = utils.Timer()
@@ -417,22 +383,39 @@ class Workspace:
                 self.__dict__[k] = v
         print(f'loaded snapshot: {snapshot} in checkpoint_mode {self.cfg.checkpoint}')
 
+try:
+    @hydra.main(config_path='cfgs', config_name='config_gym', version_base='1.1')
+    def main(cfg):
+        from pathlib import Path
+        if cfg.use_wandb:
+            wandb.tensorboard.patch(root_logdir=str(Path.cwd()))
+        from train_gym import Workspace as W
+        root_dir = Path.cwd()
+        workspace = W(cfg)
+        snapshot = root_dir / 'snapshot.pt'
+        if cfg.checkpoint:
+            assert snapshot.exists(), f'checkpoint {snapshot} does not exist!'
+        if snapshot.exists():
+            print(f'resuming: {snapshot}')
+            workspace.load_snapshot()
+        workspace.train()
+except:
+    @hydra.main(config_path='cfgs', config_name='config_gym')
+    def main(cfg):
+        from pathlib import Path
+        if cfg.use_wandb:
+            wandb.tensorboard.patch(root_logdir=str(Path.cwd()))
+        from train_gym import Workspace as W
+        root_dir = Path.cwd()
+        workspace = W(cfg)
+        snapshot = root_dir / 'snapshot.pt'
+        if cfg.checkpoint:
+            assert snapshot.exists(), f'checkpoint {snapshot} does not exist!'
+        if snapshot.exists():
+            print(f'resuming: {snapshot}')
+            workspace.load_snapshot()
+        workspace.train()   
 
-@hydra.main(config_path='cfgs', config_name='config_gym_new', version_base='1.1')
-def main(cfg):
-    from pathlib import Path
-    if cfg.use_wandb:
-        wandb.tensorboard.patch(root_logdir=str(Path.cwd()))
-    from train_gym import Workspace as W
-    root_dir = Path.cwd()
-    workspace = W(cfg)
-    snapshot = root_dir / 'snapshot.pt'
-    if cfg.checkpoint:
-        assert snapshot.exists(), f'checkpoint {snapshot} does not exist!'
-    if snapshot.exists():
-        print(f'resuming: {snapshot}')
-        workspace.load_snapshot()
-    workspace.train()
 
 
 if __name__ == '__main__':

@@ -1,3 +1,5 @@
+# @package _global_
+
 agent:
   _target_: agents.drqv2.DrQV2Agent
   obs_type: ${obs_type}

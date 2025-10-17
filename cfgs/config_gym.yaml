@@ -1,8 +1,8 @@
 defaults:
   - task@_global_: PointMaze_MediumDense
-  - agent@_global_: drqv2
-  - wrapper@_global_: null
-  - experiment: ???  # Required experiment config - must be specified explicitly or use 'null' for no experiment
+  - agent: drqv2
+  - wrapper: null
+  - experiment: null  # Required experiment config - must be specified explicitly or use 'null' for no experiment
   - _self_
   - override hydra/launcher: submitit_local
 
@@ -65,8 +65,6 @@ wandb_tag: none
 wandb_run_name: ${now:%Y.%m.%d}_${now:%H%M}_${task_name}
 wandb_id: none
 
-# Experiment name
-exp_name: default
 
 
 hydra:
