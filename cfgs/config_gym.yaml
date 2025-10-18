@@ -1,9 +1,9 @@
 defaults:
-  - task@_global_: PointMaze_MediumDense
+  - _self_
   - agent: drqv2
   - wrapper: null
+  - task@_global_: PointMaze_MediumDense
   - experiment: null  # Required experiment config - must be specified explicitly or use 'null' for no experiment
-  - _self_
   - override hydra/launcher: submitit_local
 
 # Domain

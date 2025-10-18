@@ -15,5 +15,3 @@ wrapper:
   optimizer_type: adam
 
 
-reward: false
-curl: false

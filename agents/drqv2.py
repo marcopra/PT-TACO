@@ -80,6 +80,7 @@ class DrQV2Agent(BaseAgent):
         self.update_every_steps = update_every_steps
         self.stddev_schedule = stddev_schedule
         self.stddev_clip = stddev_clip
+        self.has_critic_target = True
 
         self.load_encoder = load_encoder
         self.load_actor = load_actor
@@ -114,54 +115,9 @@ class DrQV2Agent(BaseAgent):
     
     def build_networks(self):
         """Build all neural networks for the agent."""
-        self.build_encoders()
-        self.build_actor_critic()
-    
-    
-    def build_encoders(self):
-        # Image encoder
-        if self.obs_type == 'pixel_obs':
-            self.encoder = ImageEncoder(self.obs_shape, self.feature_dim).to(self.device)
-        elif self.obs_type == 'proprio_obs':
-            self.encoder = nn.Identity().to(self.device)
-            self.encoder.repr_dim = self.obs_shape[0]
-            self.encoder.eval()
-        else:
-            raise ValueError(f"Unsupported observation type: {self.obs_type}")
-    
-    def build_actor_critic(self):
-        ## Actor
-        self.actor = Actor(
-            self.encoder.repr_dim,
-            self.action_shape,
-            self.feature_dim,
-            self.hidden_dim
-        ).to(self.device)
-        
-        # Critic (note: DrQV2 uses raw action_dim, not latent_a_dim)
-        self.critic = Critic(
-            self.encoder.repr_dim,
-            self.action_shape[0],  # Raw action dimension
-            self.feature_dim,
-            self.hidden_dim
-        ).to(self.device)
-        
-        self.critic_target = Critic(
-            self.encoder.repr_dim,
-            self.action_shape[0],  # Raw action dimension
-            self.feature_dim,
-            self.hidden_dim
-        ).to(self.device)
-        self.critic_target.load_state_dict(self.critic.state_dict())
-    
-    def build_optimizers(self):
-        """Build optimizers for all components."""
-        if self.obs_type == 'proprio_obs':
-            self.encoder_opt = None
-        else:
-            self.encoder_opt = torch.optim.Adam(self.encoder.parameters(), lr=self.lr)
-        self.actor_opt = torch.optim.Adam(self.actor.parameters(), lr=self.lr)
-        self.critic_opt = torch.optim.Adam(self.critic.parameters(), lr=self.lr)
+        self.build_encoder()
+        self.build_actor()
+        self.build_critic(target=self.has_critic_target)
     
     def _load_components(
         self,
@@ -203,6 +159,7 @@ class DrQV2Agent(BaseAgent):
         return super()._freeze_encoder()
     
     def unfreeze_encoder(self):
+        raise NotImplementedError("un freeze to be implemented in subclass")
         """Unfreeze encoder."""
         if self._frozen_fingerprints is not None:
             for param in self.encoder.parameters():

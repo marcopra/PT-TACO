@@ -171,7 +171,7 @@ class Actor(nn.Module):
     def __init__(
         self,
         repr_dim: int,
-        action_shape: Tuple[int, ...],
+        action_dim: int,
         feature_dim: int,
         hidden_dim: int
     ):
@@ -195,7 +195,7 @@ class Actor(nn.Module):
             nn.ReLU(inplace=True),
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(inplace=True),
-            nn.Linear(hidden_dim, action_shape[0])
+            nn.Linear(hidden_dim, action_dim)
         )
         
         self.apply(utils.weight_init)

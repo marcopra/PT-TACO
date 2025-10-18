@@ -48,9 +48,9 @@ class TACOWrapper:
             self.encoder = ProprioceptiveEncoder(self.obs_shape, feature_dim).to(self.device)
             self.base_algorithm.encoder = self.encoder  
             self.load_encoder = self.base_algorithm.load_encoder
-            self.base_algorithm.build_actor_critic()  # We need to rebuild actor critic to match the new encoder output size
+            self.base_algorithm.build_actor()  # We need to rebuild actor to match the new encoder output size
+            self.base_algorithm.build_critic(target=self.base_algorithm.has_critic_target)  # We need to rebuild critic to match the new encoder output size
 
-        
         self.actor = self.base_algorithm.actor
         self.critic = self.base_algorithm.critic
         if hasattr(self.base_algorithm, 'critic_target'):

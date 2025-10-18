@@ -19,7 +19,7 @@ action_shape: ??? # to be specified later
 # Override global parameters
 pretrained_path: none
 freeze_encoder: false
-encoder_checkpoint_steps: []
+encoder_checkpoint_steps: [10000, 20000, 30000]
 
 # Training settings
 num_train_frames: 1000000

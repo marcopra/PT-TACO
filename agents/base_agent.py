@@ -13,6 +13,7 @@ import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
 from typing import Dict, Optional, Any, Tuple
+from agents.components import Actor, Critic, ImageEncoder
 import utils
 
 
@@ -60,22 +61,57 @@ class BaseAgent(ABC):
     
     def __getattribute__(self, name):
         return super().__getattribute__(name)
-        
-    @abstractmethod
-    def build_networks(self):
-        """
-        Build all neural network components of the agent.
-        Must be implemented by subclasses.
-        """
-        pass
     
-    @abstractmethod
+    def build_encoder(self):
+        """Build the encoder network."""
+        # Image encoder
+        if self.obs_type == 'pixel_obs':
+            self.encoder = ImageEncoder(self.obs_shape, self.feature_dim).to(self.device)
+        elif self.obs_type == 'proprio_obs':
+            self.encoder = nn.Identity().to(self.device)
+            self.encoder.repr_dim = self.obs_shape[0]
+            self.encoder.eval()
+        else:
+            raise ValueError(f"Unsupported observation type: {self.obs_type}")
+
+    def build_actor(self):
+        """Build the actor network."""
+        self.actor = Actor(
+            self.encoder.repr_dim,
+            self.action_shape[0],
+            self.feature_dim,
+            self.hidden_dim,
+        ).to(self.device)
+    
+    def build_critic(self, target: bool):
+        """Build the critic network."""
+         # Critic (note: DrQV2 uses raw action_dim, not latent_a_dim)
+        self.critic = Critic(
+            self.encoder.repr_dim,
+            self.action_shape[0],  # Raw action dimension
+            self.feature_dim,
+            self.hidden_dim
+        ).to(self.device)
+        
+        if target:
+            self.critic_target = Critic(
+                self.encoder.repr_dim,
+                self.action_shape[0],  # Raw action dimension
+                self.feature_dim,
+                self.hidden_dim
+            ).to(self.device)
+            
+            self.critic_target.load_state_dict(self.critic.state_dict())
+        
     def build_optimizers(self):
-        """
-        Build all optimizers for the agent.
-        Must be implemented by subclasses.
-        """
-        pass
+        """Build optimizers for all components."""
+        if self.obs_type == 'proprio_obs':
+            self.encoder_opt = None
+        else:
+            self.encoder_opt = torch.optim.Adam(self.encoder.parameters(), lr=self.lr)
+        self.actor_opt = torch.optim.Adam(self.actor.parameters(), lr=self.lr)
+        self.critic_opt = torch.optim.Adam(self.critic.parameters(), lr=self.lr)
+
     
     @abstractmethod
     def act(self, obs: torch.Tensor, step: int, eval_mode: bool) -> Any:

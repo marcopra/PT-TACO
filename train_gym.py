@@ -176,12 +176,7 @@ class Workspace:
         
         # Create checkpoint folder
         checkpoint_folder.mkdir(exist_ok=True)
-        
-        # Save encoder model
-        model_filename = f"encoder_{self.cfg.task_name}_{step_str}_{episode_str}_{reward_str}.pt"
-        model_path = checkpoint_folder / model_filename
-        torch.save(encoder_state, model_path)
-        
+                
         # Copy replay buffer folder
         replay_buffer_source = self.work_dir / 'buffer'
         replay_buffer_dest = checkpoint_folder / 'buffer'
@@ -191,7 +186,7 @@ class Workspace:
             shutil.copytree(replay_buffer_source, replay_buffer_dest, dirs_exist_ok=True)
             print(f'Replay buffer copied to: {replay_buffer_dest}')
         
-        self.save_snapshot_with_name(f"{step_str}_{episode_str}_{reward_str}")
+        self.save_snapshot(name = f"_{step_str}_{episode_str}_{reward_str}")
 
         print(f'Checkpoint saved: {checkpoint_folder} (Step: {step_threshold}, Reward: {current_reward if current_reward is not None else 0})')
 
@@ -275,9 +270,10 @@ class Workspace:
         metrics = None
 
         while train_until_step(self.global_step):
-            # self.check_and_save_step_checkpoints(episode_reward)
-
+            
             if time_step.last():
+                self.check_and_save_step_checkpoints(episode_reward)
+
                 self._global_episode += 1
                 self.train_video_recorder.save(f'{self.global_frame}.mp4')
                 # wait until all the metrics schema is populated
@@ -356,15 +352,15 @@ class Workspace:
             episode_step += 1
             self._global_step += 1
 
-    def save_snapshot(self):
-        snapshot = self.work_dir / 'snapshot.pt'
-        keys_to_save = ['agent', 'timer', '_global_step', '_global_episode']
-        payload = {k: self.__dict__[k] for k in keys_to_save}
-        with snapshot.open('wb') as f:
-            torch.save(payload, f)
+    # def save_snapshot(self):
+    #     snapshot = self.work_dir / 'snapshot.pt'
+    #     keys_to_save = ['agent', 'timer', '_global_step', '_global_episode']
+    #     payload = {k: self.__dict__[k] for k in keys_to_save}
+    #     with snapshot.open('wb') as f:
+    #         torch.save(payload, f)
 
-    def save_snapshot_with_name(self, name):
-        snapshot = self.work_dir / f'snapshot_{name}.pt'
+    def save_snapshot(self, name=""):
+        snapshot = self.work_dir / f'snapshot{name}.pt'
         keys_to_save = ['agent', 'timer', '_global_step', '_global_episode']
         payload = {k: self.__dict__[k] for k in keys_to_save}
         with snapshot.open('wb') as f:
