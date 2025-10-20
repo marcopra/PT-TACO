@@ -252,7 +252,7 @@ def load_unified_dataset(config_or_path, batch_size=32, num_workers=4,
         ColorPrint.green(f"Using direct loading from {direct_path}")
         # Use direct loading like the old implementation
         loader = make_replay_loader(
-            replay_dir=direct_path,
+            direct_path,
             max_size=1000000 if max_size is None else max_size,
             batch_size=batch_size,
             num_workers=num_workers,
@@ -278,7 +278,7 @@ def load_unified_dataset(config_or_path, batch_size=32, num_workers=4,
         
         # Create loader
         loader = make_replay_loader(
-            replay_dir=temp_dir,
+            temp_dir,
             max_size=1000000 if max_size is None else max_size,
             batch_size=batch_size,
             num_workers=num_workers,
@@ -374,7 +374,7 @@ def load_single_task_dataset(config_or_path, batch_size=32, num_workers=4,
         ColorPrint.green(f"Using direct loading from {dataset_path} for {split_type}")
         
         loader = make_replay_loader(
-            replay_dir=dataset_path,
+            dataset_path,
             max_size=1000000 if effective_max_size is None else effective_max_size,
             batch_size=batch_size,
             num_workers=num_workers,
@@ -401,7 +401,7 @@ def load_single_task_dataset(config_or_path, batch_size=32, num_workers=4,
         
         # Create loader
         loader = make_replay_loader(
-            replay_dir=temp_dir,
+            temp_dir,
             max_size=1000000 if effective_max_size is None else effective_max_size,
             batch_size=batch_size,
             num_workers=num_workers,

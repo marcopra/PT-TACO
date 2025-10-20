@@ -3,6 +3,8 @@ import io
 import random
 import traceback
 from collections import defaultdict
+from pathlib import Path
+import pathlib
 
 import numpy as np
 import torch
@@ -165,9 +167,6 @@ class ReplayBuffer(IterableDataset):
         # add +1 for the first dummy transition
         n_step = max(self._nstep, self._multistep)
         idx = np.random.randint(0, episode_len(episode) - n_step + 1) + 1
-        meta = []
-        for spec in self._meta_specs:
-            meta.append(episode[spec.name][idx - 1])
         obs = episode[self._observation_key][idx - 1]
         r_next_obs = episode[self._observation_key][idx + self._multistep - 1]
         action = episode['action'][idx]
@@ -179,7 +178,7 @@ class ReplayBuffer(IterableDataset):
             step_reward = episode['reward'][idx + i]
             reward += discount * step_reward
             discount *= episode['discount'][idx + i] * self._discount
-        return (obs, action, action_seq, reward, discount, next_obs, r_next_obs, *meta)
+        return (obs, action, action_seq, reward, discount, next_obs, r_next_obs)
 
     def __iter__(self):
         while True:
@@ -301,15 +300,28 @@ def make_replay_loader(storage, max_size, batch_size, num_workers,
                        save_snapshot, nstep, multistep, discount, obs_type='observation'):
     max_size_per_worker = max_size // max(1, num_workers)
 
-    iterable = ReplayBufferMetaSpecs(storage,
-                            max_size_per_worker,
-                            num_workers,
-                            nstep,
-                            multistep,
-                            discount,
-                            fetch_every=1000,
-                            save_snapshot=save_snapshot,
-                            obs_type=obs_type)
+    if type(storage) is ReplayBufferStorage:
+        iterable = ReplayBufferMetaSpecs(storage,
+                                max_size_per_worker,
+                                num_workers,
+                                nstep,
+                                multistep,
+                                discount,
+                                fetch_every=1000,
+                                save_snapshot=save_snapshot,
+                                obs_type=obs_type)
+    elif type(storage) is pathlib.PosixPath:
+        iterable = ReplayBuffer(storage,
+                                max_size_per_worker,
+                                num_workers,
+                                nstep,
+                                multistep,
+                                discount,
+                                fetch_every=1000,
+                                save_snapshot=save_snapshot,
+                                obs_type=obs_type)
+    else:
+        raise ValueError("storage must be either ReplayBufferStorage or Path obtained:", type(storage))
     print(f"Replay buffer size: {len(iterable)}")
 
     loader = torch.utils.data.DataLoader(iterable,

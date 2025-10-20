@@ -15,6 +15,10 @@ obs_type: proprioception
 obs_shape: ??? # to be specified later
 action_shape: ??? # to be specified later
 
+load_encoder: true
+load_actor: false
+load_critic: false 
+
 # saving settings
 save_path: models/
 
