@@ -142,7 +142,7 @@ class TACOWrapper:
         self.TACO.train(training)
         self.act_tok.train(training)
 
-    def act(self, obs, step, eval_mode):
+    def act(self, obs, meta, step, eval_mode):
         obs = torch.as_tensor(obs, device=self.device)
         obs = self.encoder(obs.unsqueeze(0))
         stddev = utils.schedule(self.stddev_schedule, step)
