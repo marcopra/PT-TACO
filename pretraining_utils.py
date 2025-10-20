@@ -51,6 +51,7 @@ def extract_dataset_name_from_path(dataset_config):
         dataset_path = dataset_config
         dataset_names = [extract_task_name_from_path(dataset_path)]
         print(f"Single task dataset path: {dataset_path}")
+
 def extract_task_name_from_path(dataset_path):
     """Extract task name from dataset path (same logic as generate_config.py)"""
     dataset_path = Path(dataset_path)
@@ -456,6 +457,7 @@ def get_dataloaders(cfg, obs_type, multi_task=False):
     if multi_task:
         raise NotImplementedError("Multi-task loading not implemented in this function")
     return train_loader, valid_loader, None  # No test loader for single task
+
 class MetricsLogger:
     """Gestisce la raccolta, aggregazione e logging delle metriche"""
     

@@ -19,6 +19,7 @@ import wandb
 import utils
 from logger import Logger
 from replay_buffer import ReplayBufferStorage, make_replay_loader
+import shutil
 from video import TrainVideoRecorder, VideoRecorder
 
 torch.backends.cudnn.benchmark = True
@@ -47,24 +48,9 @@ class Workspace:
         self.cfg = cfg
         utils.set_seed_everywhere(cfg.seed)
         self.device = torch.device(cfg.device)
+
         self.setup()
 
-        # Get observation and action specs for the agent
-        if self.obs_type=='proprio_obs':
-            obs_spec = gym_env.proprio_obs_spec(self.train_env)
-        elif self.obs_type=='pixel_obs':
-            obs_spec = gym_env.pixel_obs_spec(self.train_env)
-        else:
-            raise ValueError(f"Unknown obs_type {self.cfg.obs_type}")  
-        action_spec = gym_env.action_spec(self.train_env)
-        
-        if hasattr(cfg, 'wrapper') and cfg.wrapper is not None and cfg.wrapper._target_ != 'none':
-            wrapper_cfg = cfg.wrapper
-        else:
-            wrapper_cfg = None
-        
-        # Passa l'intera configurazione, non cfg.agent
-        self.agent = make_wrapped_agent(obs_spec, action_spec, self.cfg.agent, wrapper_cfg)
         self.timer = utils.Timer()
         self._global_step = 0
         self._global_episode = 0
@@ -105,9 +91,31 @@ class Workspace:
         self.eval_env = gym_env.make(self.cfg.task_name, self.cfg.frame_stack,
                                 self.cfg.action_repeat, self.cfg.seed, self.cfg.resolution, self.cfg.random_init, self.cfg.random_goal)
 
+        self.obs_type = utils.OBS_KEY_REGISTRY.get(self.cfg.obs_type, self.cfg.obs_type)
+        print(f"Observation key for the replay buffer:")
+        utils.ColorPrint.blue(f"{self.obs_type}")
+        # Get observation and action specs for the agent
+        if self.obs_type=='proprio_obs':
+            obs_spec = gym_env.proprio_obs_spec(self.train_env)
+        elif self.obs_type=='pixel_obs':
+            obs_spec = gym_env.pixel_obs_spec(self.train_env)
+        else:
+            raise ValueError(f"Unknown obs_type {self.cfg.obs_type}")  
+        action_spec = gym_env.action_spec(self.train_env)
+
+        if hasattr(self.cfg, 'wrapper') and self.cfg.wrapper is not None and self.cfg.wrapper._target_ != 'none':
+            wrapper_cfg = self.cfg.wrapper
+        else:
+            wrapper_cfg = None
+        
+        # Passa l'intera configurazione, non cfg.agent
+        self.agent = make_wrapped_agent(obs_spec, action_spec, self.cfg.agent, wrapper_cfg)
+
         sample_time_step = self.train_env.reset()
         proprio_shape = sample_time_step.proprio_obs.shape
 
+        # get meta specs
+        meta_specs = self.agent.get_meta_specs()
         # create replay buffer
         data_specs = (gym_env.pixel_obs_spec(self.train_env),
                       gym_env.action_spec(self.train_env),
@@ -115,15 +123,12 @@ class Workspace:
                       specs.Array((1,), np.float32, 'discount'),
                       specs.Array(proprio_shape, np.float32, 'proprio_obs'))
 
-        self.replay_storage = ReplayBufferStorage(data_specs,
+        self.replay_storage = ReplayBufferStorage(data_specs, meta_specs,
                                                   self.work_dir / 'buffer')
         
-        self.obs_type = utils.OBS_KEY_REGISTRY.get(self.cfg.obs_type, self.cfg.obs_type)
-        print(f"Observation key for the replay buffer:")
-        utils.ColorPrint.blue(f"{self.obs_type}")
 
         self.replay_loader = make_replay_loader(
-            self.work_dir / 'buffer', self.cfg.replay_buffer_size,
+            self.replay_storage, self.cfg.replay_buffer_size,
             self.cfg.batch_size, self.cfg.replay_buffer_num_workers,
             self.cfg.save_snapshot, self.cfg.nstep, self.cfg.multistep, self.cfg.discount, obs_type=self.obs_type)
         self._replay_iter = None
@@ -141,54 +146,30 @@ class Workspace:
                 not self.encoder_saved_flags[step_threshold]):
                 
                 self.encoder_saved_flags[step_threshold] = True
-                self.save_encoder_checkpoint(step_threshold, current_reward)
-
-    def save_encoder_checkpoint(self, step_threshold, current_reward=None):
-        """Save encoder checkpoint with informative naming and replay buffer"""
-        import shutil
-        
-        # Create encoder state dict similar to pretrain_MT_multiheads.py
-        encoder_state = {
-            'encoder': self.agent.encoder.state_dict(),
-            'taco': self.agent.TACO.state_dict(),
-            'act_tok': self.agent.act_tok.state_dict(),
-            'args': {
-                'env_name': self.cfg.task_name,
-                'seed': self.cfg.seed,
-                'global_step': self.global_step,
-                'global_episode': self.global_episode,
-                'step_threshold': step_threshold,
-                'current_reward': current_reward
-            },
-            'global_step': self.global_step,
-            'global_episode': self.global_episode,
-            'step_threshold': step_threshold,
-            'current_reward': current_reward
-        }
-        
-        # Create informative folder name
-        step_str = f"step{step_threshold}"
-        episode_str = f"ep{self.global_episode}"
-        reward_str = f"rew{current_reward:.0f}" if current_reward is not None else "rewN/A"
-        
-        checkpoint_folder_name = f"checkpoint_{self.cfg.task_name}_{step_str}_{episode_str}_{reward_str}"
-        checkpoint_folder = self.work_dir / checkpoint_folder_name
-        
-        # Create checkpoint folder
-        checkpoint_folder.mkdir(exist_ok=True)
+                # Create informative folder name
+                step_str = f"step{step_threshold}"
+                episode_str = f"ep{self.global_episode}"
+                reward_str = f"rew{current_reward:.0f}" if current_reward is not None else "rewN/A"
                 
-        # Copy replay buffer folder
-        replay_buffer_source = self.work_dir / 'buffer'
-        replay_buffer_dest = checkpoint_folder / 'buffer'
-        
-        if replay_buffer_source.exists():
-            # Copy the entire buffer directory
-            shutil.copytree(replay_buffer_source, replay_buffer_dest, dirs_exist_ok=True)
-            print(f'Replay buffer copied to: {replay_buffer_dest}')
-        
-        self.save_snapshot(name = f"_{step_str}_{episode_str}_{reward_str}")
+                checkpoint_folder_name = f"checkpoint_{self.cfg.task_name}_{step_str}_{episode_str}_{reward_str}"
+                checkpoint_folder = self.work_dir / checkpoint_folder_name
+                
+                # Create checkpoint folder
+                checkpoint_folder.mkdir(exist_ok=True)
+                        
+                # Copy replay buffer folder
+                replay_buffer_source = self.work_dir / 'buffer'
+                replay_buffer_dest = checkpoint_folder / 'buffer'
+                
+                if replay_buffer_source.exists():
+                    # Copy the entire buffer directory
+                    shutil.copytree(replay_buffer_source, replay_buffer_dest, dirs_exist_ok=True)
+                    print(f'Replay buffer copied to: {replay_buffer_dest}')
+                
+                self.save_snapshot(name = f"_{step_str}_{episode_str}_{reward_str}")
 
-        print(f'Checkpoint saved: {checkpoint_folder} (Step: {step_threshold}, Reward: {current_reward if current_reward is not None else 0})')
+                print(f'Checkpoint saved: {checkpoint_folder} (Step: {step_threshold}, Reward: {current_reward if current_reward is not None else 0})')
+        
 
     @property
     def global_step(self):
@@ -215,6 +196,7 @@ class Workspace:
         while eval_until_episode(episode):
             time_step = self.eval_env.reset()
             self.video_recorder.init(self.eval_env, enabled=(episode == 0))
+            meta = self.agent.init_meta()
             while not time_step.last():
                 with torch.no_grad(), utils.eval_mode(self.agent):
                     if self.obs_type=='proprio_obs':
@@ -224,6 +206,7 @@ class Workspace:
    
                     action = self.agent.act(obs,
                                             self.global_step,
+                                            meta,
                                             eval_mode=True)
                 time_step = self.eval_env.step(action)
                 self.video_recorder.record(self.eval_env)
@@ -265,7 +248,8 @@ class Workspace:
 
         episode_step, episode_reward = 0, 0
         time_step = self.train_env.reset()
-        self.replay_storage.add(time_step)
+        meta = self.agent.init_meta()
+        self.replay_storage.add(time_step, meta)
         self.train_video_recorder.init(time_step.pixel_obs)
         metrics = None
 
@@ -305,7 +289,8 @@ class Workspace:
 
                 # reset env
                 time_step = self.train_env.reset()
-                self.replay_storage.add(time_step)
+                meta = self.agent.init_meta()
+                self.replay_storage.add(time_step, meta)
                 self.train_video_recorder.init(time_step.pixel_obs)
                 # try to save snapshot
                 if self.cfg.save_snapshot:
@@ -313,12 +298,24 @@ class Workspace:
                 episode_step = 0
                 episode_reward = 0
 
+            
             # try to evaluate
             if eval_every_step(self.global_step):
                 self.logger.log('eval_total_time', self.timer.total_time(),
                                 self.global_frame)
                 self.eval()
 
+            meta = self.agent.update_meta(meta, self.global_step, time_step)
+
+            if hasattr(self.agent, "regress_meta"):
+                repeat = self.cfg.action_repeat
+                every = self.agent.update_task_every_step // repeat
+                init_step = self.agent.num_init_steps
+                if self.global_step > (
+                        init_step // repeat) and self.global_step % every == 0:
+                    meta = self.agent.regress_meta(self.replay_iter,
+                                                   self.global_step)
+                    
             # sample action
             with torch.no_grad(), utils.eval_mode(self.agent):
                 if self.obs_type=='proprio_obs':
@@ -326,6 +323,7 @@ class Workspace:
                 elif self.obs_type=='pixel_obs':
                     obs = time_step.pixel_obs
                 action = self.agent.act(obs,
+                                        meta,
                                         self.global_step,
                                         eval_mode=False)
 
@@ -347,17 +345,10 @@ class Workspace:
             # take env step
             time_step = self.train_env.step(action)
             episode_reward += time_step.reward
-            self.replay_storage.add(time_step)
+            self.replay_storage.add(time_step, meta)
             self.train_video_recorder.record(time_step.pixel_obs)
             episode_step += 1
             self._global_step += 1
-
-    # def save_snapshot(self):
-    #     snapshot = self.work_dir / 'snapshot.pt'
-    #     keys_to_save = ['agent', 'timer', '_global_step', '_global_episode']
-    #     payload = {k: self.__dict__[k] for k in keys_to_save}
-    #     with snapshot.open('wb') as f:
-    #         torch.save(payload, f)
 
     def save_snapshot(self, name=""):
         snapshot = self.work_dir / f'snapshot{name}.pt'

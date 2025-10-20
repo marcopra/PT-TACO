@@ -9,7 +9,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import IterableDataset
 
-from utils import OBS_KEY_REGISTRY
 
 def episode_len(episode):
     # subtract -1 because the dummy first transition
@@ -50,7 +49,7 @@ class ReplayBufferStorage:
             value = time_step[spec.name]
             if np.isscalar(value):
                 value = np.full(spec.shape, value, spec.dtype)
-            assert spec.shape == value.shape and spec.dtype == value.dtype, f"Expected {spec.shape}, got {value.shape}, and {spec.dtype}, got {value.dtype}"
+            assert spec.shape == value.shape and spec.dtype == value.dtype
             self._current_episode[spec.name].append(value)
         if time_step.last():
             episode = dict()
@@ -82,114 +81,9 @@ class ReplayBufferStorage:
 
 
 class ReplayBuffer(IterableDataset):
-    def __init__(self, replay_dir, max_size, num_workers, nstep,  multistep, 
-                 discount, fetch_every, save_snapshot, obs_type='observation'):
-        self._replay_dir = replay_dir
-        self._size = 0
-        self._max_size = max_size
-        self._num_workers = max(1, num_workers)
-        self._episode_fns = []
-        self._episodes = dict()
-        self._nstep = nstep
-        self._discount = discount
-        self._fetch_every = fetch_every
-        self._samples_since_last_fetch = fetch_every
-        self._save_snapshot = save_snapshot
-        self._multistep = multistep
-        self._observation_key = OBS_KEY_REGISTRY.get(obs_type, obs_type)
-        print('Loading Data into CPU Memory')
-        self._preload()
-
-    def __len__(self):
-        return self._size
-    
-    def _sample_episode(self):
-        eps_fn = random.choice(self._episode_fns)
-        return self._episodes[eps_fn]
-
-    def _store_episode(self, eps_fn):
-        try:
-            episode = load_episode(eps_fn)
-        except:
-            return False
-        eps_len = episode_len(episode)
-        while eps_len + self._size > self._max_size:
-            early_eps_fn = self._episode_fns.pop(0)
-            early_eps = self._episodes.pop(early_eps_fn)
-            self._size -= episode_len(early_eps)
-            early_eps_fn.unlink(missing_ok=True)
-        self._episode_fns.append(eps_fn)
-        self._episode_fns.sort()
-        self._episodes[eps_fn] = episode
-        self._size += eps_len
-
-        if not self._save_snapshot:
-            eps_fn.unlink(missing_ok=True)
-        return True
-
-    def _try_fetch(self):
-        if self._samples_since_last_fetch < self._fetch_every:
-            return
-        self._samples_since_last_fetch = 0
-        try:
-            worker_id = torch.utils.data.get_worker_info().id
-        except:
-            worker_id = 0
-
-        eps_fns = sorted(self._replay_dir.rglob('*.npz'), reverse=True)
-        fetched_size = 0
-        for eps_fn in eps_fns:
-            eps_idx, eps_len = [int(x) for x in eps_fn.stem.split('_')[1:]]
-            if eps_idx % self._num_workers != worker_id:
-                continue
-            if eps_fn in self._episodes.keys():
-                break
-            if fetched_size + eps_len > self._max_size:
-                break
-            fetched_size += eps_len
-            if not self._store_episode(eps_fn):
-                break
-    
-    def _preload(self):
-        eps_fns = sorted(self._replay_dir.rglob('*.npz'), reverse=True)
-        for eps_fn in eps_fns:
-            self._store_episode(eps_fn)
-    
-    def _sample(self):
-        try:
-            self._try_fetch()
-        except:
-            traceback.print_exc()
-        self._samples_since_last_fetch += 1
-        episode = self._sample_episode()
-        # add +1 for the first dummy transition
-        n_step = max(self._nstep, self._multistep)
-        idx = np.random.randint(0, episode_len(episode) - n_step + 1) + 1
-        meta = []
-        for spec in self._meta_specs:
-            meta.append(episode[spec.name][idx - 1])
-        obs = episode[self._observation_key][idx - 1]
-        r_next_obs = episode[self._observation_key][idx + self._multistep - 1]
-        action = episode['action'][idx]
-        action_seq = np.concatenate([episode['action'][idx+i][None, :] for i in range(self._multistep)])
-        next_obs = episode[self._observation_key][idx + self._nstep - 1]
-        reward = np.zeros_like(episode['reward'][idx])
-        discount = np.ones_like(episode['discount'][idx])
-        for i in range(self._nstep):
-            step_reward = episode['reward'][idx + i]
-            reward += discount * step_reward
-            discount *= episode['discount'][idx + i] * self._discount
-        return (obs, action, action_seq, reward, discount, next_obs, r_next_obs, *meta)
-
-    def __iter__(self):
-        while True:
-            yield self._sample()
-
-class ReplayBufferMetaSpecs(IterableDataset):
-    def __init__(self, storage, max_size, num_workers, nstep,  multistep, 
-                 discount, fetch_every, save_snapshot, obs_type='observation'):
+    def __init__(self, storage, max_size, num_workers, nstep, discount,
+                 fetch_every, save_snapshot):
         self._storage = storage
-        self._replay_dir = storage._replay_dir
         self._size = 0
         self._max_size = max_size
         self._num_workers = max(1, num_workers)
@@ -200,14 +94,7 @@ class ReplayBufferMetaSpecs(IterableDataset):
         self._fetch_every = fetch_every
         self._samples_since_last_fetch = fetch_every
         self._save_snapshot = save_snapshot
-        self._multistep = multistep
-        self._observation_key = OBS_KEY_REGISTRY.get(obs_type, obs_type)
-        print('Loading Data into CPU Memory')
-        self._preload()
 
-    def __len__(self):
-        return self._size
-    
     def _sample_episode(self):
         eps_fn = random.choice(self._episode_fns)
         return self._episodes[eps_fn]
@@ -240,8 +127,7 @@ class ReplayBufferMetaSpecs(IterableDataset):
             worker_id = torch.utils.data.get_worker_info().id
         except:
             worker_id = 0
-
-        eps_fns = sorted(self._replay_dir.rglob('*.npz'), reverse=True)
+        eps_fns = sorted(self._storage._replay_dir.glob('*.npz'), reverse=True)
         fetched_size = 0
         for eps_fn in eps_fns:
             eps_idx, eps_len = [int(x) for x in eps_fn.stem.split('_')[1:]]
@@ -254,12 +140,7 @@ class ReplayBufferMetaSpecs(IterableDataset):
             fetched_size += eps_len
             if not self._store_episode(eps_fn):
                 break
-    
-    def _preload(self):
-        eps_fns = sorted(self._replay_dir.rglob('*.npz'), reverse=True)
-        for eps_fn in eps_fns:
-            self._store_episode(eps_fn)
-    
+
     def _sample(self):
         try:
             self._try_fetch()
@@ -268,23 +149,20 @@ class ReplayBufferMetaSpecs(IterableDataset):
         self._samples_since_last_fetch += 1
         episode = self._sample_episode()
         # add +1 for the first dummy transition
-        n_step = max(self._nstep, self._multistep)
-        idx = np.random.randint(0, episode_len(episode) - n_step + 1) + 1
+        idx = np.random.randint(0, episode_len(episode) - self._nstep + 1) + 1
         meta = []
         for spec in self._storage._meta_specs:
             meta.append(episode[spec.name][idx - 1])
-        obs = episode[self._observation_key][idx - 1]
-        r_next_obs = episode[self._observation_key][idx + self._multistep - 1]
+        obs = episode['observation'][idx - 1]
         action = episode['action'][idx]
-        action_seq = np.concatenate([episode['action'][idx+i][None, :] for i in range(self._multistep)])
-        next_obs = episode[self._observation_key][idx + self._nstep - 1]
+        next_obs = episode['observation'][idx + self._nstep - 1]
         reward = np.zeros_like(episode['reward'][idx])
         discount = np.ones_like(episode['discount'][idx])
         for i in range(self._nstep):
             step_reward = episode['reward'][idx + i]
             reward += discount * step_reward
             discount *= episode['discount'][idx + i] * self._discount
-        return (obs, action, action_seq, reward, discount, next_obs, r_next_obs, *meta)
+        return (obs, action, reward, discount, next_obs, *meta)
 
     def __iter__(self):
         while True:
@@ -298,19 +176,16 @@ def _worker_init_fn(worker_id):
 
 
 def make_replay_loader(storage, max_size, batch_size, num_workers,
-                       save_snapshot, nstep, multistep, discount, obs_type='observation'):
+                       save_snapshot, nstep, discount):
     max_size_per_worker = max_size // max(1, num_workers)
 
-    iterable = ReplayBufferMetaSpecs(storage,
+    iterable = ReplayBuffer(storage,
                             max_size_per_worker,
                             num_workers,
                             nstep,
-                            multistep,
                             discount,
                             fetch_every=1000,
-                            save_snapshot=save_snapshot,
-                            obs_type=obs_type)
-    print(f"Replay buffer size: {len(iterable)}")
+                            save_snapshot=save_snapshot)
 
     loader = torch.utils.data.DataLoader(iterable,
                                          batch_size=batch_size,
@@ -318,9 +193,3 @@ def make_replay_loader(storage, max_size, batch_size, num_workers,
                                          pin_memory=True,
                                          worker_init_fn=_worker_init_fn)
     return loader
-
-
-
-
-
-

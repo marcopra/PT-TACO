@@ -14,7 +14,6 @@ import utils
 
 class DDPGAgent(BaseAgent):
     def __init__(self,
-                 name,
                  reward_free,
                  obs_type,
                  obs_shape,
@@ -35,6 +34,9 @@ class DDPGAgent(BaseAgent):
                  use_wandb,
                  meta_dim=0,
                  pretrained_path=None,
+                 load_encoder=True,
+                 load_actor=False,
+                 load_critic=False,
                  freeze_encoder=False):
         super().__init__(
             obs_shape=obs_shape,
@@ -63,6 +65,10 @@ class DDPGAgent(BaseAgent):
         self.feature_dim = feature_dim
         self.solved_meta = None
 
+        self.has_critic_target = True
+        self.pretrained_path = pretrained_path
+        self.freeze_encoder = freeze_encoder    
+
 
         self.build_encoder()
         self.build_actor()
@@ -79,10 +85,16 @@ class DDPGAgent(BaseAgent):
         # optimizer
         self.build_optimizers()
 
-        if pretrained_path is not None:
-            raise NotImplementedError("pretrained to be implemented in subclass")
+        if self.pretrained_path is not None and self.pretrained_path != "none":
+            self._load_components(
+                self.pretrained_path,
+                load_encoder=load_encoder,
+                load_actor=load_actor,
+                load_critic=load_critic
+            )
+
         if freeze_encoder:
-            raise NotImplementedError("freeze to be implemented in subclass")
+            self._freeze_encoder()
         self.train()
         self.critic_target.train()
 
@@ -112,9 +124,10 @@ class DDPGAgent(BaseAgent):
         obs = torch.as_tensor(obs, device=self.device).unsqueeze(0)
         h = self.encoder(obs)
         inputs = [h]
-        for value in meta.values():
-            value = torch.as_tensor(value, device=self.device).unsqueeze(0)
-            inputs.append(value)
+        if hasattr(meta, 'values'):
+            for value in meta.values():
+                value = torch.as_tensor(value, device=self.device).unsqueeze(0)
+                inputs.append(value)
         inpt = torch.cat(inputs, dim=-1)
         #assert obs.shape[-1] == self.obs_shape[-1]
         stddev = utils.schedule(self.stddev_schedule, step)
@@ -193,7 +206,7 @@ class DDPGAgent(BaseAgent):
             return metrics
 
         batch = next(replay_iter)
-        obs, action, reward, discount, next_obs = utils.to_torch(
+        obs, action, action_seq, reward, discount, next_obs, r_next_obs = utils.to_torch(
             batch, self.device)
 
         # augment and encode

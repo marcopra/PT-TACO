@@ -12,9 +12,10 @@ This is the foundational class for all RL agents. It provides:
 import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
-from typing import Dict, Optional, Any, Tuple
+from typing import Dict, Optional, Any, Tuple, Union
 from agents.components import Actor, Critic, ImageEncoder
 import utils
+from collections import OrderedDict
 
 
 class BaseAgent(ABC):
@@ -58,6 +59,15 @@ class BaseAgent(ABC):
         
         # These will store fingerprints of frozen models
         self._frozen_fingerprints: Optional[Dict[str, Dict[str, torch.Tensor]]] = None
+    
+    def get_meta_specs(self):
+        return tuple()
+
+    def init_meta(self):
+        return OrderedDict()
+
+    def update_meta(self, meta, global_step, time_step, finetune=False):
+        return meta
     
     def __getattribute__(self, name):
         return super().__getattribute__(name)
@@ -112,14 +122,52 @@ class BaseAgent(ABC):
         self.actor_opt = torch.optim.Adam(self.actor.parameters(), lr=self.lr)
         self.critic_opt = torch.optim.Adam(self.critic.parameters(), lr=self.lr)
 
+    def _load_components(
+        self,
+        models_path: Union[Dict[str, Any], str],
+        load_encoder: bool,
+        load_actor: bool,
+        load_critic: bool,
+    ):
+        """
+        Load specified components from models_path.
+        
+        Args:
+            models_path: Loaded models_path dictionary or string path
+            load_encoder: Whether to load encoder weights
+            load_actor: Whether to load actor weights
+            load_critic: Whether to load critic weights
+            freeze_encoder: Whether encoder will be frozen
+        """
+
+        if isinstance(models_path, str):
+            checkpoint = torch.load(models_path, map_location=self.device, weights_only=False)
+        else:
+            checkpoint = models_path
+
+        if load_encoder and not isinstance(self.encoder, nn.Identity):
+            self.encoder.load_state_dict(checkpoint['encoder'])
+            utils.ColorPrint.green("✓ Encoder loaded from checkpoint")
+
+        if load_actor:
+            self.actor.load_state_dict(checkpoint['actor'])
+            utils.ColorPrint.green("✓ Actor loaded from checkpoint")
+
+        if load_critic:
+            self.critic.load_state_dict(checkpoint['critic'])
+            if self.has_critic_target:
+                self.critic_target.load_state_dict(checkpoint['critic'])
+            utils.ColorPrint.green("✓ Critic loaded from checkpoint")
+
     
     @abstractmethod
-    def act(self, obs: torch.Tensor, step: int, eval_mode: bool) -> Any:
+    def act(self, obs: torch.Tensor, meta: OrderedDict, step: int, eval_mode: bool) -> Any:
         """
         Select an action given an observation.
         
         Args:
             obs: Observation from environment
+            meta: Meta information (used only for URL)
             step: Current training step
             eval_mode: Whether in evaluation mode
             

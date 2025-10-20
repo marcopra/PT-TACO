@@ -109,6 +109,9 @@ class DrQV2Agent(BaseAgent):
                 load_actor=load_actor,
                 load_critic=load_critic
             )
+        if freeze_encoder:
+            self._freeze_encoder()
+            
         # Set training mode
         self.train()
         self.critic_target.train()
@@ -119,44 +122,7 @@ class DrQV2Agent(BaseAgent):
         self.build_actor()
         self.build_critic(target=self.has_critic_target)
     
-    def _load_components(
-        self,
-        models_path: Union[Dict[str, Any], str],
-        load_encoder: bool,
-        load_actor: bool,
-        load_critic: bool,
-    ):
-        """
-        Load specified components from models_path.
-        
-        Args:
-            models_path: Loaded models_path dictionary or string path
-            load_encoder: Whether to load encoder weights
-            load_actor: Whether to load actor weights
-            load_critic: Whether to load critic weights
-            freeze_encoder: Whether encoder will be frozen
-        """
-
-        if isinstance(models_path, str):
-            checkpoint = torch.load(models_path, map_location=self.device, weights_only=False)
-        else:
-            checkpoint = models_path
-
-        if load_encoder and not isinstance(self.encoder, nn.Identity):
-            self.encoder.load_state_dict(checkpoint['encoder'])
-            utils.ColorPrint.green("✓ Encoder loaded from checkpoint")
-
-        if load_actor:
-            self.actor.load_state_dict(checkpoint['actor'])
-            utils.ColorPrint.green("✓ Actor loaded from checkpoint")
-
-        if load_critic:
-            self.critic.load_state_dict(checkpoint['critic'])
-            self.critic_target.load_state_dict(checkpoint['critic'])
-            utils.ColorPrint.green("✓ Critic loaded from checkpoint")
     
-    def _freeze_encoder(self):
-        return super()._freeze_encoder()
     
     def unfreeze_encoder(self):
         raise NotImplementedError("un freeze to be implemented in subclass")
@@ -177,12 +143,13 @@ class DrQV2Agent(BaseAgent):
         self.actor.train(training)
         self.critic.train(training)
     
-    def act(self, obs: torch.Tensor, step: int, eval_mode: bool):
+    def act(self, obs: torch.Tensor, meta: Tuple, step: int, eval_mode: bool):
         """
         Select action given observation.
         
         Args:
             obs: Observation tensor
+            meta: Meta information (used only for compatibility)
             step: Current step
             eval_mode: Whether in evaluation mode
             
