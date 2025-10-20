@@ -20,7 +20,9 @@ action_shape: ??? # to be specified later
 pretrained_path: none
 freeze_encoder: false
 encoder_checkpoint_steps: [10000, 20000, 30000]
-
+load_encoder: true
+load_actor: false
+load_critic: false 
 # Training settings
 num_train_frames: 1000000
 batch_size: 256

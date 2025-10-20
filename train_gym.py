@@ -205,8 +205,8 @@ class Workspace:
                         obs = time_step.pixel_obs
    
                     action = self.agent.act(obs,
+                                            meta,   
                                             self.global_step,
-                                            meta,
                                             eval_mode=True)
                 time_step = self.eval_env.step(action)
                 self.video_recorder.record(self.eval_env)
