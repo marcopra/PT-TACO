@@ -96,6 +96,15 @@ class TACOWrapper:
         self.train()
         utils.ColorPrint.green("Using TACO Wrapper")
 
+    def get_meta_specs(self):
+        return self.base_algorithm.get_meta_specs()
+
+    def init_meta(self):
+        return self.base_algorithm.init_meta()
+
+    def update_meta(self, meta, global_step, time_step, finetune=False):
+        return self.base_algorithm.update_meta(meta, global_step, time_step, finetune)
+    
     def _load_components(self, models_path: Union[str, Dict[str, Any]]):
         utils.ColorPrint.blue(f"Loading pretrained model from: {models_path}")
 

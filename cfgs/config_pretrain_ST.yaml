@@ -12,7 +12,7 @@ seed: 1
 
 
 # dataset settings
-dataset_config: /home/mprattico/Pretrain-TACO/dataset/expert_medium
+dataset_config: /home/mprattico/Pretrain-TACO/dataset/random_medium
 train_ratio: 0.8
 
 # training settings
