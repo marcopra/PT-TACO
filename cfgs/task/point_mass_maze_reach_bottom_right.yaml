@@ -5,6 +5,6 @@ defaults:
 task_name: point_mass_maze_reach_bottom_right
 obs_type: pixels
 agent:
-  stddev_clip: 0.5
+  stddev_clip: 0.3
   hidden_dim: 512
-  num_expl_steps: 5000
+  num_expl_steps: 2000

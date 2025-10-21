@@ -14,6 +14,7 @@ exp_name: taco_drqv2_pointmaze_base
 obs_type: proprioception
 obs_shape: ??? # to be specified later
 action_shape: ??? # to be specified later
+repr_dim: 512
 
 load_encoder: true
 load_actor: false

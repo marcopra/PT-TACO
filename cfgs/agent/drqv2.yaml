@@ -14,7 +14,7 @@ agent:
   hidden_dim: 1024
   feature_dim: ${feature_dim}
   stddev_schedule: ${stddev_schedule}
-  stddev_clip: 0.3
+  stddev_clip: 0.5
   pretrained_path: ${pretrained_path}
   load_encoder: ${load_encoder}
   load_actor: ${load_actor}

@@ -11,7 +11,7 @@ from typing import Tuple, Optional, Dict, Any, Union
 class TACOWrapper:
     """Wraps any classical algorithm with TACO enhancements"""
 
-    def __init__(self, base_algorithm, encoder_lr, feature_dim,
+    def __init__(self, base_algorithm, encoder_lr, repr_dim, feature_dim,
                  hidden_dim, reward, multistep, latent_a_dim, curl, 
                  pretrained_path=None, freeze_encoder=False, no_enc_auxiliary_losses=False, optimizer_type="adam"):
         
@@ -45,16 +45,12 @@ class TACOWrapper:
             self.load_encoder = False
         else:
             assert self.obs_type == 'proprio_obs', "With image observations, an encoder must be provided in the base algorithm."
-            self.encoder = ProprioceptiveEncoder(self.obs_shape, feature_dim).to(self.device)
+            self.encoder = ProprioceptiveEncoder(self.obs_shape, repr_dim).to(self.device)
             self.base_algorithm.encoder = self.encoder  
             self.load_encoder = self.base_algorithm.load_encoder
+            self.base_algorithm.feature_dim = feature_dim
             self.base_algorithm.build_actor()  # We need to rebuild actor to match the new encoder output size
             self.base_algorithm.build_critic(target=self.base_algorithm.has_critic_target)  # We need to rebuild critic to match the new encoder output size
-
-        self.actor = self.base_algorithm.actor
-        self.critic = self.base_algorithm.critic
-        if hasattr(self.base_algorithm, 'critic_target'):
-            self.critic_target = self.base_algorithm.critic_target
 
         self.TACO = TACO(self.encoder.repr_dim, feature_dim, self.action_shape, latent_a_dim, hidden_dim, self.act_tok, self.encoder, self.multistep, self.device).to(self.device)
         self.freeze_encoder = freeze_encoder
@@ -82,10 +78,11 @@ class TACOWrapper:
         # data augmentation
         if hasattr(self.base_algorithm, 'aug'):
             self.aug = self.base_algorithm.aug
-        elif self.obs_type == 'pixel_obs':
-            self.aug = RandomShiftsAug(pad=4)
         else:
-            self.aug = nn.Identity()
+            if self.obs_type == 'pixel_obs':
+                self.aug = RandomShiftsAug(pad=4)
+            else:
+                self.aug = nn.Identity()
 
         if pretrained_path is not None and pretrained_path != 'none' and self.load_encoder:
             self._load_components(pretrained_path)
@@ -143,18 +140,8 @@ class TACOWrapper:
         self.act_tok.train(training)
 
     def act(self, obs, meta, step, eval_mode):
-        obs = torch.as_tensor(obs, device=self.device)
-        obs = self.encoder(obs.unsqueeze(0))
-        stddev = utils.schedule(self.stddev_schedule, step)
-        dist = self.actor(obs, stddev)
-        if eval_mode:
-            action = dist.mean
-        else:
-            action = dist.sample(clip=None)
-            if step < self.num_expl_steps:
-                action.uniform_(-1.0, 1.0)
-        return action.cpu().numpy()[0]
-    
+        return self.base_algorithm.act(obs, meta, step, eval_mode)
+
     def update_taco(self, obs, action, action_seq, next_obs, reward):
         metrics = dict()
         
@@ -205,12 +192,13 @@ class TACOWrapper:
         if step % self.update_every_steps != 0:
             return metrics
 
-        metrics.update(self.base_algorithm.update(replay_iter, step))  # Update base algorithm components
-
         batch = next(replay_iter)
         obs, action, action_seq, reward, discount, next_obs, r_next_obs = utils.to_torch(
             batch, self.device)
-        
+
+        metrics.update(self.base_algorithm.update(iter([batch]), step)) # create a new iterator for the batch maybe is not the best way but works
+        # TODO change the signature of base_algorithm.update to accept directly obs, action, etc.
+
         if self.use_tb:
             metrics['batch_reward'] = reward.mean().item()
         
