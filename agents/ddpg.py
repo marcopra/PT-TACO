@@ -66,6 +66,7 @@ class DDPGAgent(BaseAgent):
         self.solved_meta = None
 
         self.has_critic_target = True
+        self.act_tok = None  # DDPG does not use action tokenizer
         self.pretrained_path = pretrained_path
         self.freeze_encoder = freeze_encoder    
 
@@ -151,7 +152,7 @@ class DDPGAgent(BaseAgent):
             target_V = torch.min(target_Q1, target_Q2)
             target_Q = reward + (discount * target_V)
 
-        Q1, Q2 = self.critic(obs, action)
+        Q1, Q2 = self.critic(obs, action, self.act_tok)  # DDPG does not use action tokenizer
         critic_loss = F.mse_loss(Q1, target_Q) + F.mse_loss(Q2, target_Q)
 
         if self.use_tb or self.use_wandb:
@@ -177,7 +178,7 @@ class DDPGAgent(BaseAgent):
         dist = self.actor(obs, stddev)
         action = dist.sample(clip=self.stddev_clip)
         log_prob = dist.log_prob(action).sum(-1, keepdim=True)
-        Q1, Q2 = self.critic(obs, action)
+        Q1, Q2 = self.critic(obs, action, self.act_tok)  # DDPG does not use action tokenizer
         Q = torch.min(Q1, Q2)
 
         actor_loss = -Q.mean()

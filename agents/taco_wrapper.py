@@ -3,7 +3,7 @@ import torch.nn as nn
 from agents.components import TACO
 import torch.nn.functional as F
 import utils
-from .components import RandomShiftsAug, ProprioceptiveEncoder
+from .components import RandomShiftsAug, ProprioceptiveEncoder, Critic
 import itertools
 import utils
 from typing import Tuple, Optional, Dict, Any, Union
@@ -32,12 +32,18 @@ class TACOWrapper:
         self.multistep = multistep
         self.optimizer_type = optimizer_type.lower()
 
+        # 🔥 MONKEY PATCH: Sostituisci update_critic del base_algorithm
+        self._monkey_patch_base_algorithm()
+
 
         ### A heuristics to choose the dimensionality of latent actions
         if latent_a_dim == 'none':
             latent_a_dim = int(self.action_shape[0]*1.25)+1
+        print(f"Using latent action dimension: {latent_a_dim}")
+        self.latent_a_dim = latent_a_dim
         ### Create action embeddings
-        self.act_tok = utils.ActionEncoding(self.action_shape[0], latent_a_dim, multistep)
+        self.act_tok = utils.ActionEncoding(self.action_shape[0], self.latent_a_dim, multistep)
+        self.base_algorithm.act_tok = self.act_tok
 
         # Initialize encoder
         if hasattr(self.base_algorithm, 'encoder') and not isinstance(self.base_algorithm.encoder, nn.Identity): # Assume that every vision based algorithm has an encoder attribute, and prioprio based algorithm always use Identity
@@ -50,7 +56,8 @@ class TACOWrapper:
             self.load_encoder = self.base_algorithm.load_encoder
             self.base_algorithm.feature_dim = feature_dim
             self.base_algorithm.build_actor()  # We need to rebuild actor to match the new encoder output size
-            self.base_algorithm.build_critic(target=self.base_algorithm.has_critic_target)  # We need to rebuild critic to match the new encoder output size
+        self.base_algorithm.build_critic(target=self.base_algorithm.has_critic_target)  # We need to rebuild critic to match the new encoder output size
+
 
         self.TACO = TACO(self.encoder.repr_dim, feature_dim, self.action_shape, latent_a_dim, hidden_dim, self.act_tok, self.encoder, self.multistep, self.device).to(self.device)
         self.freeze_encoder = freeze_encoder
@@ -73,6 +80,7 @@ class TACOWrapper:
             if not self.no_enc_auxiliary_losses:
                 self.taco_opt = optimizer_class(self.TACO.parameters(), lr=encoder_lr)
 
+        self.base_algorithm.build_optimizers()
         self.cross_entropy_loss = nn.CrossEntropyLoss()
         
         # data augmentation
@@ -89,6 +97,8 @@ class TACOWrapper:
         if freeze_encoder:
             self._freeze_encoder()
         
+         
+        
         self.pretrained_path = pretrained_path
         self.train()
         utils.ColorPrint.green("Using TACO Wrapper")
@@ -102,6 +112,43 @@ class TACOWrapper:
     def update_meta(self, meta, global_step, time_step, finetune=False):
         return self.base_algorithm.update_meta(meta, global_step, time_step, finetune)
     
+    def _monkey_patch_base_algorithm(self):
+        """Substitute original update_critic method of base_algorithm with TACO version"""
+        # Save the original method for future reference (if needed)
+        if hasattr(self.base_algorithm, 'update_critic'):            
+
+            # Replace with the wrapper method
+            self.base_algorithm.update_critic = self.update_critic
+            
+            utils.ColorPrint.blue("🔧 Monkey patched base_algorithm.update_critic with TACO version")
+        
+        if hasattr(self.base_algorithm, 'build_critic'):
+
+            self.base_algorithm.build_critic = self.build_critic
+
+            utils.ColorPrint.blue("🔧 Monkey patched base_algorithm.build_critic to match TACO action encoder output size")
+    
+    def build_critic(self, target: bool):
+        """Build the critic network."""
+        print("Building TACO-wrapped critic...")
+         # Critic (note: DrQV2 uses raw action_dim, not latent_a_dim)
+        self.base_algorithm.critic = Critic(
+            self.encoder.repr_dim,
+            self.latent_a_dim,  # new custom latent dim
+            self.base_algorithm.feature_dim,
+            self.base_algorithm.hidden_dim
+        ).to(self.device)
+        
+        if target:
+            self.base_algorithm.critic_target = Critic(
+                self.encoder.repr_dim,
+                self.latent_a_dim,  # Raw action dimension
+                self.base_algorithm.feature_dim,
+                self.base_algorithm.hidden_dim
+            ).to(self.device)
+
+            self.base_algorithm.critic_target.load_state_dict(self.base_algorithm.critic.state_dict())
+
     def _load_components(self, models_path: Union[str, Dict[str, Any]]):
         utils.ColorPrint.blue(f"Loading pretrained model from: {models_path}")
 
@@ -141,6 +188,38 @@ class TACOWrapper:
 
     def act(self, obs, meta, step, eval_mode):
         return self.base_algorithm.act(obs, meta, step, eval_mode)
+    
+    def update_critic(self, obs, action, reward, discount, next_obs, step):
+        metrics = dict()
+
+        with torch.no_grad():
+            stddev = utils.schedule(self.stddev_schedule, step)
+            dist = self.base_algorithm.actor(next_obs, stddev)
+            next_action = dist.sample(clip=self.stddev_clip)
+            target_Q1, target_Q2 = self.base_algorithm.critic_target(next_obs, next_action, self.act_tok)
+            target_V = torch.min(target_Q1, target_Q2)
+            target_Q = reward + (discount * target_V)
+
+        Q1, Q2 = self.base_algorithm.critic(obs, action, self.act_tok)
+        critic_loss = F.mse_loss(Q1, target_Q) + F.mse_loss(Q2, target_Q)
+
+        if self.use_tb:
+            metrics['critic_target_q'] = target_Q.mean().item()
+            metrics['critic_q1'] = Q1.mean().item()
+            metrics['critic_q2'] = Q2.mean().item()
+            metrics['critic_loss'] = critic_loss.item()
+
+        # optimize encoder and critic
+        if not self.freeze_encoder:
+            self.encoder_opt.zero_grad(set_to_none=True) # TODO check encoder were really frozen, I should put a if freeze don't optimize to be 100% sure
+        self.base_algorithm.critic_opt.zero_grad(set_to_none=True)
+        critic_loss.backward()
+        self.base_algorithm.critic_opt.step()
+        if not self.freeze_encoder:
+            self.encoder_opt.step()
+
+        return metrics
+    
 
     def update_taco(self, obs, action, action_seq, next_obs, reward):
         metrics = dict()
@@ -207,6 +286,7 @@ class TACOWrapper:
         
         metrics.update(self.update_taco(obs, action, action_seq, r_next_obs, reward))
         return metrics
+    
     
     def evaluate_taco(self, obs, action, action_seq, next_obs, reward):
         with torch.no_grad():

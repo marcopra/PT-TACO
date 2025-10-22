@@ -81,6 +81,7 @@ class DrQV2Agent(BaseAgent):
         self.stddev_schedule = stddev_schedule
         self.stddev_clip = stddev_clip
         self.has_critic_target = True
+        self.act_tok = None  # No action tokenizer in DrQV2
 
         self.load_encoder = load_encoder
         self.load_actor = load_actor
@@ -205,7 +206,7 @@ class DrQV2Agent(BaseAgent):
             target_V = torch.min(target_Q1, target_Q2)
             target_Q = reward + (discount * target_V)
         
-        Q1, Q2 = self.critic(obs, action)
+        Q1, Q2 = self.critic(obs, action, self.act_tok) # DrQV2: No action tokenizer
         critic_loss = F.mse_loss(Q1, target_Q) + F.mse_loss(Q2, target_Q)
         
         if self.use_tb:
@@ -243,7 +244,7 @@ class DrQV2Agent(BaseAgent):
         action = dist.sample(clip=self.stddev_clip)
         log_prob = dist.log_prob(action).sum(-1, keepdim=True)
         
-        Q1, Q2 = self.critic(obs, action)
+        Q1, Q2 = self.critic(obs, action, self.act_tok)  # DrQV2: No action tokenizer
         Q = torch.min(Q1, Q2)
         
         actor_loss = -Q.mean()
