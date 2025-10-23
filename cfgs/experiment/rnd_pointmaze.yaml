@@ -1,0 +1,35 @@
+# @package _global_
+
+# Base DrQV2 experiment on PointMaze
+# Usage: python train_gym.py experiment=drqv2_pointmaze_base
+
+defaults:
+  - override /task@_global_: PointMaze_MediumDense
+  - override /agent: rnd
+  - override /wrapper: null
+
+# Experiment name
+exp_name: rnd_pointmaze_base
+
+# Observation type
+obs_type: proprioception
+obs_shape: ??? # to be specified later
+action_shape: ??? # to be specified later
+
+reward_free: true
+update_encoder: true # should always be true for pre-training
+
+# Override global parameters
+pretrained_path: none
+encoder_checkpoint_steps: [10000, 20000, 30000]
+
+# Training settings
+num_train_frames: 1000000
+batch_size: 256
+
+
+# Wandb settings
+wandb_run_name: ${now:%Y.%m.%d}_${now:%H%M}_rnd_pointmaze_base
+wandb_tag: rnd_pointmaze_base
+
+

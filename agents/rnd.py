@@ -105,7 +105,7 @@ class RNDAgent(DDPGAgent):
             return metrics
 
         batch = next(replay_iter)
-        obs, action, extr_reward, discount, next_obs = utils.to_torch(
+        obs, action, action_seq, extr_reward, discount, next_obs, r_next_obs = utils.to_torch(
             batch, self.device)
 
         # update RND first

@@ -167,6 +167,26 @@ class Timer:
     def total_time(self):
         return time.time() - self._start_time
 
+class RMS(object):
+    """running mean and std """
+    def __init__(self, device, epsilon=1e-4, shape=(1,)):
+        self.M = torch.zeros(shape).to(device)
+        self.S = torch.ones(shape).to(device)
+        self.n = epsilon
+
+    def __call__(self, x):
+        bs = x.size(0)
+        delta = torch.mean(x, dim=0) - self.M
+        new_M = self.M + delta * bs / (self.n + bs)
+        new_S = (self.S * self.n + torch.var(x, dim=0) * bs +
+                 torch.square(delta) * self.n * bs /
+                 (self.n + bs)) / (self.n + bs)
+
+        self.M = new_M
+        self.S = new_S
+        self.n += bs
+
+        return self.M, self.S
 
 class TruncatedNormal(pyd.Normal):
     def __init__(self, loc, scale, low=-1.0, high=1.0, eps=1e-6):
