@@ -68,7 +68,10 @@ class DDPGAgent(BaseAgent):
         self.has_critic_target = True
         self.act_tok = None  # DDPG does not use action tokenizer
         self.pretrained_path = pretrained_path
-        self.freeze_encoder = freeze_encoder    
+        self.freeze_encoder = freeze_encoder   
+        self.load_encoder = load_encoder
+        self.load_actor = load_actor
+        self.load_critic = load_critic 
 
 
         self.build_encoder()

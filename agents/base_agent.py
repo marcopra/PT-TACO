@@ -137,7 +137,6 @@ class BaseAgent(ABC):
             load_encoder: Whether to load encoder weights
             load_actor: Whether to load actor weights
             load_critic: Whether to load critic weights
-            freeze_encoder: Whether encoder will be frozen
         """
 
         if isinstance(models_path, str):
@@ -145,21 +144,40 @@ class BaseAgent(ABC):
         else:
             checkpoint = models_path
 
-        if load_encoder and not isinstance(self.encoder, nn.Identity):
-            self.encoder.load_state_dict(checkpoint['encoder'])
-            utils.ColorPrint.green("✓ Encoder loaded from checkpoint")
+        # Check if checkpoint contains 'agent' key (snapshot format)
+        if 'agent' in checkpoint:
+            agent_state = checkpoint['agent']
+            
+            # Extract state_dicts from the agent object
+            if load_encoder and not isinstance(self.encoder, nn.Identity):
+                self.encoder.load_state_dict(agent_state.encoder.state_dict())
+                utils.ColorPrint.green("✓ Encoder loaded from agent snapshot")
+            
+            if load_actor:
+                self.actor.load_state_dict(agent_state.actor.state_dict())
+                utils.ColorPrint.green("✓ Actor loaded from agent snapshot")
 
-        if load_actor:
-            self.actor.load_state_dict(checkpoint['actor'])
-            utils.ColorPrint.green("✓ Actor loaded from checkpoint")
+            if load_critic :
+                self.critic.load_state_dict(agent_state.critic.state_dict())
+                if self.has_critic_target and hasattr(agent_state, 'critic_target'):
+                    self.critic_target.load_state_dict(agent_state.critic_target.state_dict())
+                utils.ColorPrint.green("✓ Critic loaded from agent snapshot")
+        else:
+            # Original format with direct keys
+            if load_encoder and not isinstance(self.encoder, nn.Identity):
+                self.encoder.load_state_dict(checkpoint['encoder'])
+                utils.ColorPrint.green("✓ Encoder loaded from checkpoint")
+            
+            if load_actor:
+                self.actor.load_state_dict(checkpoint['actor'])
+                utils.ColorPrint.green("✓ Actor loaded from checkpoint")
 
-        if load_critic:
-            self.critic.load_state_dict(checkpoint['critic'])
-            if self.has_critic_target:
-                self.critic_target.load_state_dict(checkpoint['critic'])
-            utils.ColorPrint.green("✓ Critic loaded from checkpoint")
-
-    
+            if load_critic :
+                self.critic.load_state_dict(checkpoint['critic'])
+                if self.has_critic_target:
+                    self.critic_target.load_state_dict(checkpoint['critic_target'])
+                utils.ColorPrint.green("✓ Critic loaded from checkpoint")
+        
     @abstractmethod
     def act(self, obs: torch.Tensor, meta: OrderedDict, step: int, eval_mode: bool) -> Any:
         """
