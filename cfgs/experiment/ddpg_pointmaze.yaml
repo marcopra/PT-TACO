@@ -28,7 +28,7 @@ batch_size: 256
 
 
 # Wandb settings
-wandb_run_name: ${now:%Y.%m.%d}_${now:%H%M}_drqv2_pointmaze_base
-wandb_tag: drqv2_pointmaze_base
+wandb_run_name: ${now:%Y.%m.%d}_${now:%H%M}_ddpg_pointmaze_base
+wandb_tag: ddpg_pointmaze_base
 
 

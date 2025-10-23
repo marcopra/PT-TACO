@@ -35,6 +35,6 @@ batch_size: 1024
 
 # Wandb settings
 wandb_run_name: ${now:%Y.%m.%d}_${now:%H%M}_tacodrqv2_pointmaze_base
-wandb_tag: drqv2_pointmaze_base
+wandb_tag: tacodrqv2_pointmaze_base
 
 
