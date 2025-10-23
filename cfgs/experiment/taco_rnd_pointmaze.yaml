@@ -28,7 +28,7 @@ load_critic: false
 freeze_encoder: false
 encoder_checkpoint_steps: [10000, 20000, 30000]
 
-
+# taco loss parameters
 reward: false
 curl: false
 
