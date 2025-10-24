@@ -147,6 +147,10 @@ class BaseAgent(ABC):
         # Check if checkpoint contains 'agent' key (snapshot format)
         if 'agent' in checkpoint:
             agent_state = checkpoint['agent']
+
+            if 'base_algorithm' in agent_state.__dict__:
+                # Leave the wrapper to handle the loading
+                return
             
             # Extract state_dicts from the agent object
             if load_encoder and not isinstance(self.encoder, nn.Identity):

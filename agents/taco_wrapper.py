@@ -54,6 +54,8 @@ class TACOWrapper:
             self.encoder = ProprioceptiveEncoder(self.obs_shape, repr_dim).to(self.device)
             self.base_algorithm.encoder = self.encoder  
             self.load_encoder = self.base_algorithm.load_encoder
+            self.load_actor = self.base_algorithm.load_actor
+            self.load_critic = self.base_algorithm.load_critic
             self.base_algorithm.feature_dim = feature_dim
             self.base_algorithm.build_actor()  # We need to rebuild actor to match the new encoder output size
         self.base_algorithm.build_critic(target=self.base_algorithm.has_critic_target)  # We need to rebuild critic to match the new encoder output size
@@ -150,6 +152,8 @@ class TACOWrapper:
             self.base_algorithm.critic_target.load_state_dict(self.base_algorithm.critic.state_dict())
 
     def _load_components(self, models_path: Union[str, Dict[str, Any]]):
+
+        # TODO: Rewrite better the loading saving systems of the models
         utils.ColorPrint.blue(f"Loading pretrained model from: {models_path}")
 
         if isinstance(models_path, str):
@@ -167,6 +171,13 @@ class TACOWrapper:
                 utils.ColorPrint.green("✓  Loaded pretrained encoder.")
             self.act_tok.load_state_dict(agent_state.act_tok.state_dict())
             utils.ColorPrint.green("✓  Loaded pretrained action tokenizer.")
+
+            if self.load_actor:
+                self.base_algorithm.actor.load_state_dict(agent_state.base_algorithm.actor.state_dict())
+                utils.ColorPrint.green("✓  Loaded pretrained actor.")
+            if self.load_critic:
+                self.base_algorithm.critic.load_state_dict(agent_state.base_algorithm.critic.state_dict())
+                utils.ColorPrint.green("✓  Loaded pretrained critic.")
         else:
             self.TACO.load_state_dict(checkpoint['taco'])
             utils.ColorPrint.green("✓  Loaded pretrained TACO model.")
