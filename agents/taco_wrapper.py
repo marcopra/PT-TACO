@@ -158,16 +158,26 @@ class TACOWrapper:
             checkpoint = models_path
 
         print("Loading encoder weights...")
-        self.TACO.load_state_dict(checkpoint['taco'])
-        utils.ColorPrint.green("✓  Loaded pretrained TACO model.")
-        
-        if isinstance(self.encoder, ProprioceptiveEncoder):
-            self.encoder.load_state_dict(checkpoint['encoder'])
-            utils.ColorPrint.green("✓  Loaded pretrained encoder.")
-        
-        self.act_tok.load_state_dict(checkpoint['act_tok'])
-        utils.ColorPrint.green("✓  Loaded pretrained action tokenizer.")
+        if 'agent' in checkpoint:
+            agent_state = checkpoint['agent']
+            self.TACO.load_state_dict(agent_state.TACO.state_dict())
+            utils.ColorPrint.green("✓  Loaded pretrained TACO model.")
+            if isinstance(self.encoder, ProprioceptiveEncoder):
+                self.encoder.load_state_dict(agent_state.encoder.state_dict())
+                utils.ColorPrint.green("✓  Loaded pretrained encoder.")
+            self.act_tok.load_state_dict(agent_state.act_tok.state_dict())
+            utils.ColorPrint.green("✓  Loaded pretrained action tokenizer.")
+        else:
+            self.TACO.load_state_dict(checkpoint['taco'])
+            utils.ColorPrint.green("✓  Loaded pretrained TACO model.")
             
+            if isinstance(self.encoder, ProprioceptiveEncoder):
+                self.encoder.load_state_dict(checkpoint['encoder'])
+                utils.ColorPrint.green("✓  Loaded pretrained encoder.")
+            
+            self.act_tok.load_state_dict(checkpoint['act_tok'])
+            utils.ColorPrint.green("✓  Loaded pretrained action tokenizer.")
+                
     def _freeze_encoder(self):
         self.encoder.eval()
         for param in self.encoder.parameters():
